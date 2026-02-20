@@ -1,4 +1,13 @@
 @import "tailwindcss";
+/* src/app/globals.css */
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-bfl-bg text-slate-100 antialiased;
+}
 
 :root {
   --background: #ffffff;
@@ -6,10 +15,20 @@
 }
 
 @theme inline {
+  /* Default tokens from Next.js Tailwind v4 template */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* BFL-MARKET design tokens */
+  --color-bfl-bg: #050816;
+  --color-bfl-card: #0f172a;
+  --color-bfl-primary: #22c55e;
+  --color-bfl-primarySoft: #4ade80;
+  --color-bfl-accent: #38bdf8;
+
+  --shadow-bfl-card: 0 18px 45px rgba(0, 0, 0, 0.45);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -24,3 +43,4 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
