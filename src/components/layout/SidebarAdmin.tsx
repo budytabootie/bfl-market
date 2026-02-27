@@ -16,14 +16,11 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/admin/users', label: 'Users', permission: 'menu:users' },
   { href: '/admin/permissions', label: 'Permissions', permission: 'menu:permissions' },
   { href: '/admin/activity', label: 'Activity Logs', permission: 'menu:activity' },
-  { href: '/marketplace', label: 'Marketplace', permission: 'menu:marketplace' },
-  { href: '/cart', label: 'Cart', permission: 'menu:marketplace' },
-  { href: '/orders', label: 'My Orders', permission: 'menu:my-orders' },
 ];
 
-type SidebarProps = { permissions?: string[] };
+type SidebarAdminProps = { permissions?: string[] };
 
-export function Sidebar({ permissions = [] }: SidebarProps) {
+export function SidebarAdmin({ permissions = [] }: SidebarAdminProps) {
   const pathname = usePathname();
   const visible = NAV_ITEMS.filter((i) => !i.permission || permissions.includes(i.permission));
 
@@ -34,7 +31,7 @@ export function Sidebar({ permissions = [] }: SidebarProps) {
           <div className="h-8 w-8 rounded-2xl bg-gradient-to-tr from-bfl-primary to-bfl-accent shadow-lg" />
           <div>
             <div className="text-xs font-semibold tracking-[0.2em] text-slate-500 uppercase">GTA RP</div>
-            <div className="text-sm text-slate-300">Dashboard</div>
+            <div className="text-sm text-slate-300">Admin Panel</div>
           </div>
         </div>
       </div>
@@ -54,6 +51,14 @@ export function Sidebar({ permissions = [] }: SidebarProps) {
             </Link>
           );
         })}
+        <div className="pt-4 mt-4 border-t border-slate-800/80">
+          <Link
+            href="/marketplace"
+            className="flex rounded-xl px-3 py-2 text-sm font-medium text-slate-400 hover:bg-slate-800/70 hover:text-white border border-transparent transition-colors"
+          >
+            ← Ke Marketplace
+          </Link>
+        </div>
       </nav>
     </aside>
   );
