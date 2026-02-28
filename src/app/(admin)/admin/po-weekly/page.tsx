@@ -75,7 +75,13 @@ export default function AdminPoWeeklyPage() {
       .from('po_products')
       .select('id, catalog_id, catalog(name, category, base_price)')
       .order('catalog(name)');
-    setPoProducts((po ?? []) as PoProduct[]);
+    const rows = (po ?? []) as { id: string; catalog_id: string; catalog: { name: string; category: string; base_price: number } | { name: string; category: string; base_price: number }[] | null }[];
+    const mapped: PoProduct[] = rows.map((r) => ({
+      id: r.id,
+      catalog_id: r.catalog_id,
+      catalog: Array.isArray(r.catalog) ? (r.catalog[0] ?? null) : r.catalog,
+    }));
+    setPoProducts(mapped);
 
     await loadCurrentWeek();
   }
