@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, type FormEvent, useMemo } from 'react';
+import { useEffect, useState, useCallback, type FormEvent, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -47,6 +47,12 @@ export default function AdminUsersPage() {
     return filteredUsers.slice(from, from + PAGE_SIZE);
   }, [filteredUsers, page]);
 
+  const [resettingId, setResettingId] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const showToast = useCallback((message: string, type: 'success' | 'error') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4000);
+  }, []);
   const [editing, setEditing] = useState<UserRow | null>(null);
   const [editName, setEditName] = useState('');
   const [editUsername, setEditUsername] = useState('');
@@ -141,17 +147,28 @@ export default function AdminUsersPage() {
       : `Reset password untuk "${u.name}" (${u.username})? Warning: User belum punya Discord ID, DM tidak akan terkirim.`;
     if (!confirm(msg)) return;
     setError(null);
-    const res = await fetch('/api/admin/users/reset', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: u.id }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setError(data.error ?? 'Gagal reset password');
-      return;
+    setResettingId(u.id);
+    try {
+      const res = await fetch('/api/admin/users/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: u.id }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string; dmSent?: boolean; dmError?: string };
+      if (!res.ok) {
+        showToast(data.error ?? 'Gagal reset password', 'error');
+        setError(data.error ?? 'Gagal reset password');
+        return;
+      }
+      if (u.discord_id && !data.dmSent) {
+        showToast(`Password berhasil direset. Tapi DM Discord gagal: ${data.dmError ?? 'unknown'}`, 'error');
+      } else {
+        showToast('Password berhasil direset.', 'success');
+      }
+      load();
+    } finally {
+      setResettingId(null);
     }
-    load();
   }
 
   async function handleDelete(u: UserRow) {
@@ -170,6 +187,16 @@ export default function AdminUsersPage() {
 
   return (
     <>
+      {toast && (
+        <div
+          role="alert"
+          className={`fixed top-4 right-4 z-[100] rounded-xl px-4 py-3 shadow-lg text-sm font-medium ${
+            toast.type === 'success' ? 'bg-emerald-600 text-white border border-emerald-500/50' : 'bg-red-600 text-white border border-red-500/50'
+          }`}
+        >
+          {toast.message}
+        </div>
+      )}
       {error && (
         <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
           {error}
@@ -238,9 +265,11 @@ export default function AdminUsersPage() {
                     )}
                   </td>
                   <td className="p-2 text-right">
-                    <button type="button" className="text-bfl-primary hover:underline mr-2" onClick={() => openEdit(u)}>Edit</button>
-                    <button type="button" className="text-slate-400 hover:underline mr-2" onClick={() => handleReset(u)}>Reset Password</button>
-                    <button type="button" className="text-red-400 hover:underline" onClick={() => handleDelete(u)}>Hapus</button>
+                    <button type="button" className="text-bfl-primary hover:underline mr-2" onClick={() => openEdit(u)} disabled={!!resettingId}>Edit</button>
+                    <button type="button" className="text-slate-400 hover:underline mr-2 disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => handleReset(u)} disabled={!!resettingId}>
+                      {resettingId === u.id ? 'Mengirim…' : 'Reset Password'}
+                    </button>
+                    <button type="button" className="text-red-400 hover:underline" onClick={() => handleDelete(u)} disabled={!!resettingId}>Hapus</button>
                   </td>
                 </tr>
               ))}

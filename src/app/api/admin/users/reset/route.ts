@@ -6,6 +6,7 @@ import { cookies } from 'next/headers';
 export const runtime = 'nodejs';
 
 export async function POST(request: Request) {
+  try {
   const cookieStore = await cookies();
   const supabaseAuth = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -67,19 +68,31 @@ export async function POST(request: Request) {
     `**Link:** ${loginUrl}`,
   ].join('\n');
 
-  try {
-    await fetch(`${siteUrl}/api/discord/notify`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        type: 'password_reset',
-        message: dmMessage,
-        discordId: (userRow.discord_id as string) || undefined,
-      }),
-    });
-  } catch {
-    // Silent fail for DM
+  let dmSent = false;
+  let dmError: string | undefined;
+  const discordId = (userRow.discord_id as string) || undefined;
+  if (discordId) {
+    try {
+      const notifyRes = await fetch(`${siteUrl}/api/discord/notify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'password_reset',
+          message: dmMessage,
+          discordId,
+        }),
+      });
+      const notifyData = (await notifyRes.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      dmSent = notifyRes.ok && notifyData.ok === true;
+      if (!dmSent) dmError = notifyData.error ?? 'Discord DM gagal';
+    } catch (err) {
+      dmError = err instanceof Error ? err.message : 'Gagal mengirim DM';
+    }
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, dmSent, dmError });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Internal server error';
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
 }
