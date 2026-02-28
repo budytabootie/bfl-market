@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
@@ -15,11 +15,13 @@ export default function CartPage() {
   const supabase = createClient();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const processedAddRef = useRef<string | null>(null);
 
   useEffect(() => {
     const stored = typeof window !== 'undefined' ? localStorage.getItem('bfl-cart') : null;
     const ids = stored ? JSON.parse(stored) as { id: string; qty: number }[] : [];
-    if (addId) {
+    if (addId && processedAddRef.current !== addId) {
+      processedAddRef.current = addId;
       const existing = ids.find((x) => x.id === addId);
       if (existing) existing.qty += 1;
       else ids.push({ id: addId, qty: 1 });
@@ -58,7 +60,7 @@ export default function CartPage() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl border border-slate-800/80 bg-gradient-to-br from-bfl-card/60 to-slate-950/60 p-5">
+      <div className="rounded-2xl border border-slate-800/80 bg-linear-to-br from-bfl-card/60 to-slate-950/60 p-5">
         <h1 className="text-xl font-semibold text-slate-50">Keranjang</h1>
         <p className="mt-1 text-sm text-slate-400">Review item dan lanjut checkout jika sudah sesuai.</p>
       </div>
@@ -87,13 +89,13 @@ export default function CartPage() {
                         <input
                           type="number"
                           min={1}
-                          className="w-14 rounded border border-slate-700 bg-slate-900/60 px-2 py-1 text-center text-xs"
+                          className="number-input"
                           value={c.quantity}
                           onChange={(e) => updateQty(c.id, Number(e.target.value))}
                         />
                       </td>
                       <td className="p-2 text-right">{(Number(c.base_price) * c.quantity).toLocaleString('id-ID')}</td>
-                      <td className="p-2"><button type="button" className="text-red-400" onClick={() => updateQty(c.id, 0)}>Hapus</button></td>
+                      <td className="p-2"><button type="button" className="rounded-lg px-2.5 py-1 text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors" onClick={() => updateQty(c.id, 0)}>Hapus</button></td>
                     </tr>
                   ))}
                 </tbody>

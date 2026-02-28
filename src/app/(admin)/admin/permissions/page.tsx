@@ -8,7 +8,7 @@ type Role = { id: string; key: string; name: string };
 type Perm = { role_id: string; permission: string };
 
 const MENU_PERMS = [
-  'menu:admin', 'menu:catalog', 'menu:warehouse', 'menu:weapons', 'menu:orders',
+  'menu:admin', 'menu:catalog', 'menu:warehouse', 'menu:weapons', 'menu:orders', 'menu:orders-history',
   'menu:users', 'menu:permissions', 'menu:activity', 'menu:marketplace', 'menu:my-orders',
 ];
 

@@ -44,16 +44,18 @@ create table if not exists public.catalog (
   category public.catalog_category not null,
   base_price numeric(12,2) not null default 0,
   status public.catalog_status not null default 'active',
+  image_url text,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
 
--- WEAPON RELATIONS (attachment -> weapon)
+-- WEAPON RELATIONS (attachment/ammo -> weapon)
 create table if not exists public.weapon_relations (
   id uuid primary key default gen_random_uuid(),
-  attachment_catalog_id uuid not null references public.catalog(id) on delete cascade,
   weapon_catalog_id uuid not null references public.catalog(id) on delete cascade,
-  unique(attachment_catalog_id, weapon_catalog_id)
+  related_catalog_id uuid not null references public.catalog(id) on delete cascade,
+  relation_type text not null check (relation_type in ('attachment', 'ammo')),
+  unique(weapon_catalog_id, related_catalog_id)
 );
 
 -- WAREHOUSE ITEMS (non-weapon stock)
@@ -282,14 +284,14 @@ on conflict (key) do nothing;
 -- SEED MENU PERMISSIONS
 insert into public.role_permissions (role_id, permission)
 select r.id, p from public.roles r cross join (
-  values ('menu:admin'), ('menu:catalog'), ('menu:warehouse'), ('menu:weapons'), ('menu:orders'),
+  values ('menu:admin'), ('menu:catalog'), ('menu:warehouse'), ('menu:weapons'), ('menu:orders'), ('menu:orders-history'),
          ('menu:users'), ('menu:permissions'), ('menu:activity'), ('menu:marketplace'), ('menu:my-orders')
 ) as t(p) where r.key = 'superadmin'
 on conflict (role_id, permission) do nothing;
 
 insert into public.role_permissions (role_id, permission)
 select r.id, p from public.roles r cross join (
-  values ('menu:admin'), ('menu:catalog'), ('menu:warehouse'), ('menu:weapons'), ('menu:orders'),
+  values ('menu:admin'), ('menu:catalog'), ('menu:warehouse'), ('menu:weapons'), ('menu:orders'), ('menu:orders-history'),
          ('menu:activity'), ('menu:marketplace'), ('menu:my-orders')
 ) as t(p) where r.key = 'treasurer'
 on conflict (role_id, permission) do nothing;

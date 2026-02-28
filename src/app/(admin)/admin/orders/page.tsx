@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { TableToolbar } from '@/components/ui/TableToolbar';
 
 type Order = {
   id: string;
@@ -27,6 +28,20 @@ export default function AdminOrdersPage() {
   const [pending, setPending] = useState<Order[]>([]);
   const [items, setItems] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 5;
+
+  const filteredPending = useMemo(() => {
+    if (!search.trim()) return pending;
+    const q = search.trim().toLowerCase();
+    return pending.filter((o) => ((o.users as { username?: string })?.username ?? '').toLowerCase().includes(q));
+  }, [pending, search]);
+
+  const paginatedPending = useMemo(() => {
+    const from = (page - 1) * PAGE_SIZE;
+    return filteredPending.slice(from, from + PAGE_SIZE);
+  }, [filteredPending, page]);
 
   async function load() {
     const { data: ord } = await supabase
@@ -72,8 +87,17 @@ export default function AdminOrdersPage() {
   return (
     <div className="space-y-6">
       <Card title="Pending Orders">
+        <TableToolbar
+          searchPlaceholder="Cari username…"
+          searchValue={search}
+          onSearchChange={(v) => { setSearch(v); setPage(1); }}
+          totalCount={filteredPending.length}
+          page={page}
+          pageSize={PAGE_SIZE}
+          onPageChange={setPage}
+        />
         <div className="space-y-4">
-          {pending.map((o) => {
+          {paginatedPending.map((o) => {
             const orderItems = items.filter((i) => i.order_id === o.id);
             const hasApproved = orderItems.some((i) => i.status === 'approved');
             return (

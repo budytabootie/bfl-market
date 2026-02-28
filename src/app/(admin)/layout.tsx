@@ -1,5 +1,4 @@
 import { redirect } from 'next/navigation';
-import { headers } from 'next/headers';
 import { createClient } from '@/lib/supabase/server';
 import { SidebarAdmin } from '@/components/layout/SidebarAdmin';
 import { Topbar } from '@/components/layout/Topbar';
@@ -10,6 +9,7 @@ export default async function AdminLayout({
   children: React.ReactNode;
 }) {
   const supabase = await createClient();
+  const { data: { user: authUser } } = await supabase.auth.getUser();
   const { data: perms } = await supabase.rpc('current_user_permissions');
   const permissions = (perms as string[]) ?? [];
 
@@ -17,9 +17,14 @@ export default async function AdminLayout({
     redirect('/marketplace');
   }
 
-  const headersList = await headers();
-  const userEmail = headersList.get('x-bfl-user-email');
-  const user = userEmail ? { email: userEmail } : null;
+  let user: { email?: string; name?: string } | null = null;
+  if (authUser) {
+    const { data: profile } = await supabase.from('users').select('name').eq('id', authUser.id).single();
+    user = {
+      email: authUser.email ?? undefined,
+      name: (profile as { name?: string })?.name,
+    };
+  }
 
   return (
     <div className="flex min-h-screen">

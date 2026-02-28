@@ -90,7 +90,7 @@ export default function CheckoutPage() {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-2xl border border-slate-800/80 bg-gradient-to-br from-bfl-card/60 to-slate-950/60 p-5">
+      <div className="rounded-2xl border border-slate-800/80 bg-linear-to-br from-bfl-card/60 to-slate-950/60 p-5">
         <h1 className="text-xl font-semibold text-slate-50">Checkout</h1>
         <p className="mt-1 text-sm text-slate-400">Pastikan item sudah benar, lalu konfirmasi order. Admin akan memproses permintaan Anda.</p>
       </div>

@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { TableToolbar } from '@/components/ui/TableToolbar';
 type UserRow = {
   id: string;
   name: string;
@@ -26,6 +27,26 @@ export default function AdminUsersPage() {
   const [roleId, setRoleId] = useState('');
   const [discordId, setDiscordId] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [filterRole, setFilterRole] = useState('');
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 10;
+
+  const filteredUsers = useMemo(() => {
+    let r = users;
+    const q = search.trim().toLowerCase();
+    if (q) {
+      r = r.filter((u) => u.name.toLowerCase().includes(q) || u.username.toLowerCase().includes(q));
+    }
+    if (filterRole) r = r.filter((u) => u.role_id === filterRole);
+    return r;
+  }, [users, search, filterRole]);
+
+  const paginatedUsers = useMemo(() => {
+    const from = (page - 1) * PAGE_SIZE;
+    return filteredUsers.slice(from, from + PAGE_SIZE);
+  }, [filteredUsers, page]);
+
   const [editing, setEditing] = useState<UserRow | null>(null);
   const [editName, setEditName] = useState('');
   const [editUsername, setEditUsername] = useState('');
@@ -173,6 +194,23 @@ export default function AdminUsersPage() {
         {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
       </Card>
       <Card title="Users">
+        <TableToolbar
+          searchPlaceholder="Cari nama atau username…"
+          searchValue={search}
+          onSearchChange={(v) => { setSearch(v); setPage(1); }}
+          filters={[
+            {
+              label: 'Role:',
+              options: [{ value: '', label: 'Semua' }, ...roles.map((r) => ({ value: r.id, label: r.name }))],
+              value: filterRole,
+              onChange: (v) => { setFilterRole(v); setPage(1); },
+            },
+          ]}
+          totalCount={filteredUsers.length}
+          page={page}
+          pageSize={PAGE_SIZE}
+          onPageChange={setPage}
+        />
         <div className="overflow-x-auto text-xs">
           <table className="w-full">
             <thead>
@@ -186,7 +224,7 @@ export default function AdminUsersPage() {
               </tr>
             </thead>
             <tbody>
-              {users.map((u) => (
+              {paginatedUsers.map((u) => (
                 <tr key={u.id} className="border-t border-slate-800">
                   <td className="p-2">{u.name}</td>
                   <td className="p-2">{u.username}</td>

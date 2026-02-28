@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { TableToolbar } from '@/components/ui/TableToolbar';
 
 type CatalogWeapon = { id: string; name: string };
 type WarehouseWeapon = {
@@ -23,6 +24,29 @@ export default function AdminWeaponsPage() {
   const [catalogId, setCatalogId] = useState('');
   const [serial, setSerial] = useState('');
   const [status, setStatus] = useState<typeof STATUSES[number]>('available');
+  const [search, setSearch] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 10;
+
+  const filteredWeapons = useMemo(() => {
+    let r = weapons;
+    const q = search.trim().toLowerCase();
+    if (q) {
+      r = r.filter((w) => {
+        const catName = ((w.catalog as { name?: string })?.name ?? '').toLowerCase();
+        const serial = (w.serial_number ?? '').toLowerCase();
+        return catName.includes(q) || serial.includes(q);
+      });
+    }
+    if (filterStatus) r = r.filter((w) => w.status === filterStatus);
+    return r;
+  }, [weapons, search, filterStatus]);
+
+  const paginatedWeapons = useMemo(() => {
+    const from = (page - 1) * PAGE_SIZE;
+    return filteredWeapons.slice(from, from + PAGE_SIZE);
+  }, [filteredWeapons, page]);
 
   async function load() {
     const { data: c } = await supabase.from('catalog').select('id, name').eq('category', 'weapon').eq('status', 'active');
@@ -90,7 +114,7 @@ export default function AdminWeaponsPage() {
               </tr>
             </thead>
             <tbody>
-              {weapons.map((r) => (
+              {paginatedWeapons.map((r) => (
                 <tr key={r.id} className="border-t border-slate-800">
                   <td className="p-2">{(r.catalog as { name?: string })?.name ?? '-'}</td>
                   <td className="p-2 font-mono">{r.serial_number}</td>

@@ -10,6 +10,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/marketplace', label: 'Marketplace', permission: 'menu:marketplace' },
   { href: '/cart', label: 'Cart', permission: 'menu:marketplace' },
   { href: '/orders', label: 'My Orders', permission: 'menu:my-orders' },
+  { href: '/settings', label: 'Settings', permission: 'menu:marketplace' },
 ];
 
 type SidebarUserProps = { permissions?: string[] };
@@ -19,10 +20,10 @@ export function SidebarUser({ permissions = [] }: SidebarUserProps) {
   const visible = NAV_ITEMS.filter((i) => !i.permission || permissions.includes(i.permission));
 
   return (
-    <aside className="flex flex-col w-64 shrink-0 border-r border-slate-800/80 bg-gradient-to-b from-bfl-bg to-slate-950/80 max-md:w-56">
+    <aside className="flex flex-col w-64 shrink-0 border-r border-slate-800/80 bg-linear-to-b from-bfl-bg to-slate-950/80 max-md:w-56">
       <div className="px-5 pt-6 pb-4 border-b border-slate-800/80">
         <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-2xl bg-gradient-to-tr from-bfl-primary to-bfl-accent shadow-lg" />
+          <div className="h-8 w-8 rounded-2xl bg-linear-to-tr from-bfl-primary to-bfl-accent shadow-lg" />
           <div>
             <div className="text-xs font-semibold tracking-[0.2em] text-slate-500 uppercase">GTA RP</div>
             <div className="text-sm text-slate-300">BFL Market</div>
