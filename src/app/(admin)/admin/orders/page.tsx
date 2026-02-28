@@ -20,6 +20,7 @@ type OrderItem = {
   catalog_id: string;
   quantity: number;
   status: string;
+  is_po: boolean;
   catalog: { name: string } | null;
 };
 
@@ -29,14 +30,18 @@ export default function AdminOrdersPage() {
   const [items, setItems] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [filterPo, setFilterPo] = useState<'all' | 'po' | 'regular'>('all');
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 5;
 
   const filteredPending = useMemo(() => {
-    if (!search.trim()) return pending;
+    let r = pending;
     const q = search.trim().toLowerCase();
-    return pending.filter((o) => ((o.users as { username?: string })?.username ?? '').toLowerCase().includes(q));
-  }, [pending, search]);
+    if (q) r = r.filter((o) => ((o.users as { username?: string })?.username ?? '').toLowerCase().includes(q));
+    if (filterPo === 'po') r = r.filter((o) => items.some((i) => i.order_id === o.id && i.is_po));
+    if (filterPo === 'regular') r = r.filter((o) => !items.some((i) => i.order_id === o.id && i.is_po));
+    return r;
+  }, [pending, search, filterPo, items]);
 
   const paginatedPending = useMemo(() => {
     const from = (page - 1) * PAGE_SIZE;
@@ -55,7 +60,7 @@ export default function AdminOrdersPage() {
     if (orderIds.length > 0) {
       const { data: it } = await supabase
         .from('order_items')
-        .select('id, order_id, catalog_id, quantity, status, catalog(name)')
+        .select('id, order_id, catalog_id, quantity, status, is_po, catalog(name)')
         .in('order_id', orderIds);
       setItems((it ?? []) as unknown as OrderItem[]);
     } else {
@@ -91,6 +96,18 @@ export default function AdminOrdersPage() {
           searchPlaceholder="Cari username…"
           searchValue={search}
           onSearchChange={(v) => { setSearch(v); setPage(1); }}
+          filters={[
+            {
+              label: 'Tipe:',
+              options: [
+                { value: 'all', label: 'Semua' },
+                { value: 'po', label: 'Hanya PO' },
+                { value: 'regular', label: 'Hanya Regular' },
+              ],
+              value: filterPo,
+              onChange: (v) => { setFilterPo(v as 'all' | 'po' | 'regular'); setPage(1); },
+            },
+          ]}
           totalCount={filteredPending.length}
           page={page}
           pageSize={PAGE_SIZE}
@@ -114,6 +131,7 @@ export default function AdminOrdersPage() {
                       <tr className="text-slate-400">
                         <th className="p-1 text-left">Item</th>
                         <th className="p-1 text-right">Qty</th>
+                        <th className="p-1 text-center">Tipe</th>
                         <th className="p-1 text-center">Status</th>
                         <th className="p-1">Aksi</th>
                       </tr>
@@ -123,6 +141,13 @@ export default function AdminOrdersPage() {
                         <tr key={i.id} className="border-t border-slate-800">
                           <td className="p-1">{(i.catalog as { name?: string })?.name ?? '-'}</td>
                           <td className="p-1 text-right">{i.quantity}</td>
+                          <td className="p-1 text-center">
+                            {i.is_po ? (
+                              <span className="rounded px-2 py-0.5 text-[11px] bg-amber-500/20 text-amber-300">PO</span>
+                            ) : (
+                              <span className="text-slate-500">Regular</span>
+                            )}
+                          </td>
                           <td className="p-1 text-center">
                             <span className={`rounded px-2 py-0.5 text-[11px] ${
                               i.status === 'approved' ? 'bg-emerald-500/20' :

@@ -49,6 +49,9 @@ export async function middleware(request: NextRequest) {
     if (!permissions.includes('menu:admin')) {
       return NextResponse.redirect(new URL('/choose-panel', request.url));
     }
+    if (pathname.startsWith('/admin/po-') && !permissions.includes('menu:po')) {
+      return NextResponse.redirect(new URL('/admin', request.url));
+    }
   }
 
   if (pathname === '/') {

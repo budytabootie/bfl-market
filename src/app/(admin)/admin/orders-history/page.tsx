@@ -25,6 +25,7 @@ type OrderItem = {
   price_each: number;
   subtotal: number;
   status: string;
+  is_po: boolean;
   catalog: { name: string } | null;
 };
 
@@ -35,6 +36,7 @@ export default function AdminOrdersHistoryPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [filterPo, setFilterPo] = useState<'all' | 'po' | 'regular'>('all');
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 10;
 
@@ -50,8 +52,10 @@ export default function AdminOrdersHistoryPage() {
       });
     }
     if (filterStatus) r = r.filter((o) => o.status === filterStatus);
+    if (filterPo === 'po') r = r.filter((o) => items.some((i) => i.order_id === o.id && i.is_po));
+    if (filterPo === 'regular') r = r.filter((o) => !items.some((i) => i.order_id === o.id && i.is_po));
     return r;
-  }, [orders, search, filterStatus]);
+  }, [orders, search, filterStatus, filterPo, items]);
 
   const paginatedOrders = useMemo(() => {
     const from = (page - 1) * PAGE_SIZE;
@@ -75,7 +79,7 @@ export default function AdminOrdersHistoryPage() {
         if (orderIds.length > 0) {
           const { data: it } = await supabase
             .from('order_items')
-            .select('id, order_id, catalog_id, quantity, price_each, subtotal, status, catalog(name)')
+            .select('id, order_id, catalog_id, quantity, price_each, subtotal, status, is_po, catalog(name)')
             .in('order_id', orderIds);
           setItems((it ?? []) as unknown as OrderItem[]);
         } else {
@@ -129,6 +133,16 @@ export default function AdminOrdersHistoryPage() {
               ],
               value: filterStatus,
               onChange: (v) => { setFilterStatus(v); setPage(1); },
+            },
+            {
+              label: 'Tipe:',
+              options: [
+                { value: 'all', label: 'Semua' },
+                { value: 'po', label: 'Hanya PO' },
+                { value: 'regular', label: 'Hanya Regular' },
+              ],
+              value: filterPo,
+              onChange: (v) => { setFilterPo(v as 'all' | 'po' | 'regular'); setPage(1); },
             },
           ]}
           totalCount={filteredOrders.length}
@@ -184,6 +198,7 @@ export default function AdminOrdersHistoryPage() {
                         <tr className="text-slate-400">
                           <th className="p-2 text-left">Item</th>
                           <th className="p-2 text-right">Qty</th>
+                          <th className="p-2 text-center">Tipe</th>
                           <th className="p-2 text-right">Harga</th>
                           <th className="p-2 text-right">Subtotal</th>
                           <th className="p-2 text-center">Status</th>
@@ -199,6 +214,13 @@ export default function AdminOrdersHistoryPage() {
                               {(i.catalog as { name?: string })?.name ?? '-'}
                             </td>
                             <td className="p-2 text-right">{i.quantity}</td>
+                            <td className="p-2 text-center">
+                              {i.is_po ? (
+                                <span className="rounded px-2 py-0.5 text-[11px] bg-amber-500/20 text-amber-300">PO</span>
+                              ) : (
+                                <span className="text-slate-500">Regular</span>
+                              )}
+                            </td>
                             <td className="p-2 text-right">
                               {Number(i.price_each).toLocaleString('id-ID')}
                             </td>

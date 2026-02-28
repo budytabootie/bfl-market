@@ -12,24 +12,31 @@ type CatalogItem = { id: string; name: string; category: string; base_price: num
 type WeaponAddon = { id: string; name: string; base_price: number };
 type WeaponAddons = { attachments: WeaponAddon[]; ammo: WeaponAddon[] };
 
+type CartEntry = { id: string; qty: number; isPo?: boolean };
+
 const CATEGORIES = ['ammo', 'vest', 'attachment', 'weapon'] as const;
 
 export default function MarketplacePage() {
   const router = useRouter();
   const supabase = createClient();
   const [items, setItems] = useState<CatalogItem[]>([]);
+  const [poThisWeekIds, setPoThisWeekIds] = useState<Set<string>>(new Set());
   const [relations, setRelations] = useState<Record<string, WeaponAddons>>({});
   const [selectedAddons, setSelectedAddons] = useState<Record<string, Set<string>>>({});
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>('');
 
-  const addToCart = useCallback((ids: string[]) => {
+  const addToCart = useCallback((entries: { id: string; isPo: boolean }[]) => {
     const stored = typeof window !== 'undefined' ? localStorage.getItem('bfl-cart') : null;
-    const cart = stored ? JSON.parse(stored) as { id: string; qty: number }[] : [];
-    ids.forEach((id) => {
+    const cart: CartEntry[] = stored ? JSON.parse(stored) : [];
+    entries.forEach(({ id, isPo }) => {
       const existing = cart.find((x) => x.id === id);
-      if (existing) existing.qty += 1;
-      else cart.push({ id, qty: 1 });
+      if (existing) {
+        existing.qty += 1;
+        existing.isPo = isPo;
+      } else {
+        cart.push({ id, qty: 1, isPo });
+      }
     });
     localStorage.setItem('bfl-cart', JSON.stringify(cart));
     router.push('/cart');
@@ -47,18 +54,35 @@ export default function MarketplacePage() {
     });
   }, []);
 
-  const addWeaponToCart = useCallback((weaponId: string, addonIds: string[] = []) => {
-    addToCart([weaponId, ...addonIds]);
+  const addWeaponToCart = useCallback((weaponId: string, addonIds: string[], weaponIsPo: boolean) => {
+    const entries: { id: string; isPo: boolean }[] = [{ id: weaponId, isPo: weaponIsPo }];
+    addonIds.forEach((id) => entries.push({ id, isPo: poThisWeekIds.has(id) }));
+    addToCart(entries);
     setSelectedAddons((prev) => {
       const next = { ...prev };
       delete next[weaponId];
       return next;
     });
-  }, [addToCart]);
+  }, [addToCart, poThisWeekIds]);
 
   useEffect(() => {
     void (async () => {
       try {
+        const { data: weekStart } = await supabase.rpc('get_current_po_week');
+        const ids = new Set<string>();
+        if (weekStart) {
+          const { data: weekly } = await supabase
+            .from('po_weekly_availability')
+            .select('po_product_id')
+            .eq('week_start', String(weekStart));
+          const poIds = ((weekly ?? []) as { po_product_id: string }[]).map((w) => w.po_product_id);
+          if (poIds.length > 0) {
+            const { data: po } = await supabase.from('po_products').select('catalog_id').in('id', poIds);
+            ((po ?? []) as { catalog_id: string }[]).forEach((p) => ids.add(p.catalog_id));
+          }
+        }
+        setPoThisWeekIds(ids);
+
         let q = supabase.from('catalog').select('id, name, category, base_price, image_url').eq('status', 'active');
         if (filter) q = q.eq('category', filter);
         const { data } = await q.order('category').order('name');
@@ -147,7 +171,12 @@ export default function MarketplacePage() {
                   <div className="aspect-square w-1/2 rounded-xl bg-slate-800/80 flex items-center justify-center text-slate-500 text-xs">No image</div>
                 </div>
               )}
-              <div className="text-sm font-semibold">{item.name}</div>
+              <div className="flex items-center gap-2">
+                <div className="text-sm font-semibold">{item.name}</div>
+                {poThisWeekIds.has(item.id) && (
+                  <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-300 ring-1 ring-amber-500/30">PO</span>
+                )}
+              </div>
               <div className="mt-1 text-[11px] uppercase text-slate-500">{item.category}</div>
               <div className="mt-2 text-emerald-400">
                 {Number(item.base_price).toLocaleString('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 })}
@@ -192,11 +221,15 @@ export default function MarketplacePage() {
             </div>
             <Button
               className="mt-4 w-full"
-              onClick={() =>
-                item.category === 'weapon'
-                  ? addWeaponToCart(item.id, Array.from(selectedAddons[item.id] ?? []))
-                  : addToCart([item.id])
-              }
+              onClick={() => {
+                const isPo = poThisWeekIds.has(item.id);
+                if (item.category === 'weapon') {
+                  const addonIds = Array.from(selectedAddons[item.id] ?? []);
+                  addWeaponToCart(item.id, addonIds, isPo);
+                } else {
+                  addToCart([{ id: item.id, isPo }]);
+                }
+              }}
             >
               Add to Cart
             </Button>

@@ -12,11 +12,13 @@ type Order = {
 };
 
 type OrderItem = {
+  id: string;
   order_id: string;
   catalog: { name: string } | null;
   quantity: number;
   status: string;
   subtotal: number;
+  is_po: boolean;
 };
 
 export default function MyOrdersPage() {
@@ -38,7 +40,7 @@ export default function MyOrdersPage() {
 
         const ids = (ord ?? []).map((o) => o.id);
         if (ids.length > 0) {
-          const { data: it } = await supabase.from('order_items').select('order_id, catalog(name), quantity, status, subtotal').in('order_id', ids);
+          const { data: it } = await supabase.from('order_items').select('id, order_id, catalog(name), quantity, status, subtotal, is_po').in('order_id', ids);
           setItems((it ?? []) as unknown as OrderItem[]);
         }
       } finally {
@@ -77,8 +79,11 @@ export default function MyOrdersPage() {
                 </div>
                 <div className="mt-2 text-xs">
                   {items.filter((i) => i.order_id === o.id).map((i) => (
-                    <div key={i.order_id + (i.catalog as { name?: string })?.name} className="flex justify-between">
-                      <span>{(i.catalog as { name?: string })?.name ?? '-'} x{i.quantity} ({i.status})</span>
+                    <div key={i.id} className="flex justify-between items-center">
+                      <span>
+                        {(i.catalog as { name?: string })?.name ?? '-'} x{i.quantity} ({i.status})
+                        {i.is_po && <span className="ml-2 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] text-amber-300">PO</span>}
+                      </span>
                       <span>{i.subtotal.toLocaleString('id-ID')}</span>
                     </div>
                   ))}

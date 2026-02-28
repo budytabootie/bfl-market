@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 
-type CartItem = { id: string; name: string; category: string; base_price: number; quantity: number };
+type CartItem = { id: string; name: string; category: string; base_price: number; quantity: number; isPo: boolean };
 
 export default function CartPage() {
   const searchParams = useSearchParams();
@@ -19,27 +19,27 @@ export default function CartPage() {
 
   useEffect(() => {
     const stored = typeof window !== 'undefined' ? localStorage.getItem('bfl-cart') : null;
-    const ids = stored ? JSON.parse(stored) as { id: string; qty: number }[] : [];
+    const entries = stored ? JSON.parse(stored) as { id: string; qty: number; isPo?: boolean }[] : [];
     if (addId && processedAddRef.current !== addId) {
       processedAddRef.current = addId;
-      const existing = ids.find((x) => x.id === addId);
+      const existing = entries.find((x) => x.id === addId);
       if (existing) existing.qty += 1;
-      else ids.push({ id: addId, qty: 1 });
-      localStorage.setItem('bfl-cart', JSON.stringify(ids));
+      else entries.push({ id: addId, qty: 1, isPo: false });
+      localStorage.setItem('bfl-cart', JSON.stringify(entries));
       window.history.replaceState({}, '', '/cart');
     }
-    if (ids.length === 0) {
+    if (entries.length === 0) {
       setCart([]);
       setLoading(false);
       return;
     }
     void (async () => {
       try {
-        const { data } = await supabase.from('catalog').select('id, name, category, base_price').in('id', ids.map((x) => x.id));
-        const items = (data ?? []) as { id: string; name: string; category: string; base_price: number }[];
-        setCart(ids.map((x) => {
-          const item = items.find((i) => i.id === x.id);
-          return item ? { ...item, quantity: x.qty } : null;
+        const { data } = await supabase.from('catalog').select('id, name, category, base_price').in('id', entries.map((x) => x.id));
+        const catalogItems = (data ?? []) as { id: string; name: string; category: string; base_price: number }[];
+        setCart(entries.map((x) => {
+          const item = catalogItems.find((i) => i.id === x.id);
+          return item ? { ...item, quantity: x.qty, isPo: Boolean(x.isPo) } : null;
         }).filter(Boolean) as CartItem[]);
       } finally {
         setLoading(false);
@@ -52,7 +52,7 @@ export default function CartPage() {
   function updateQty(id: string, qty: number) {
     const next = cart.map((c) => (c.id === id ? { ...c, quantity: Math.max(0, qty) } : c)).filter((c) => c.quantity > 0);
     setCart(next);
-    const stored = next.map((c) => ({ id: c.id, qty: c.quantity }));
+    const stored = next.map((c) => ({ id: c.id, qty: c.quantity, isPo: c.isPo }));
     localStorage.setItem('bfl-cart', JSON.stringify(stored));
   }
 
@@ -74,6 +74,7 @@ export default function CartPage() {
                 <thead>
                   <tr className="text-slate-400">
                     <th className="p-2 text-left">Item</th>
+                    <th className="p-2 text-center w-16">Tipe</th>
                     <th className="p-2 text-right">Harga</th>
                     <th className="p-2 text-center">Qty</th>
                     <th className="p-2 text-right">Subtotal</th>
@@ -84,6 +85,13 @@ export default function CartPage() {
                   {cart.map((c) => (
                     <tr key={c.id} className="border-t border-slate-800">
                       <td className="p-2">{c.name}</td>
+                      <td className="p-2 text-center">
+                        {c.isPo ? (
+                          <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">PO</span>
+                        ) : (
+                          <span className="text-slate-500 text-[10px]">Regular</span>
+                        )}
+                      </td>
                       <td className="p-2 text-right">{Number(c.base_price).toLocaleString('id-ID')}</td>
                       <td className="p-2 text-center">
                         <input

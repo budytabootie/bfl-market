@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 
-type CartItem = { id: string; name: string; base_price: number; quantity: number };
+type CartItem = { id: string; name: string; base_price: number; quantity: number; isPo: boolean };
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -19,19 +19,19 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     const stored = typeof window !== 'undefined' ? localStorage.getItem('bfl-cart') : null;
-    const ids = stored ? JSON.parse(stored) as { id: string; qty: number }[] : [];
-    if (ids.length === 0) {
+    const entries = stored ? JSON.parse(stored) as { id: string; qty: number; isPo?: boolean }[] : [];
+    if (entries.length === 0) {
       setCart([]);
       setLoading(false);
       return;
     }
     void (async () => {
       try {
-        const { data } = await supabase.from('catalog').select('id, name, base_price').in('id', ids.map((x) => x.id));
-        const items = (data ?? []) as { id: string; name: string; base_price: number }[];
-        setCart(ids.map((x) => {
-          const item = items.find((i) => i.id === x.id);
-          return item ? { ...item, quantity: x.qty } : null;
+        const { data } = await supabase.from('catalog').select('id, name, base_price').in('id', entries.map((x) => x.id));
+        const catalogItems = (data ?? []) as { id: string; name: string; base_price: number }[];
+        setCart(entries.map((x) => {
+          const item = catalogItems.find((i) => i.id === x.id);
+          return item ? { ...item, quantity: x.qty, isPo: Boolean(x.isPo) } : null;
         }).filter(Boolean) as CartItem[]);
       } finally {
         setLoading(false);
@@ -45,6 +45,33 @@ export default function CheckoutPage() {
     if (cart.length === 0) return;
     setSubmitting(true);
     setError(null);
+
+    const poIds = cart.filter((c) => c.isPo).map((c) => c.id);
+    if (poIds.length > 0) {
+      const { data: weekStart } = await supabase.rpc('get_current_po_week');
+      if (weekStart) {
+        const { data: weekly } = await supabase
+          .from('po_weekly_availability')
+          .select('po_product_id')
+          .eq('week_start', String(weekStart));
+        const poProductIds = ((weekly ?? []) as { po_product_id: string }[]).map((w) => w.po_product_id);
+        let validCatalogIds = new Set<string>();
+        if (poProductIds.length > 0) {
+          const { data: po } = await supabase
+            .from('po_products')
+            .select('catalog_id')
+            .in('id', poProductIds);
+          ((po ?? []) as { catalog_id: string }[]).forEach((p) => validCatalogIds.add(p.catalog_id));
+        }
+        const invalid = poIds.filter((id) => !validCatalogIds.has(id));
+        if (invalid.length > 0) {
+          setError('Beberapa item PO sudah tidak tersedia untuk minggu ini. Silakan hapus dari cart dan coba lagi.');
+          setSubmitting(false);
+          return;
+        }
+      }
+    }
+
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       setError('Session expired');
@@ -74,6 +101,7 @@ export default function CheckoutPage() {
       price_each: c.base_price,
       subtotal: c.base_price * c.quantity,
       status: 'pending',
+      is_po: c.isPo,
     }));
     const { error: itemsErr } = await supabase.from('order_items').insert(items);
     if (itemsErr) {
@@ -104,8 +132,11 @@ export default function CheckoutPage() {
         <>
           <div className="space-y-2 text-sm">
             {cart.map((c) => (
-              <div key={c.id} className="flex justify-between">
-                <span>{c.name} x{c.quantity}</span>
+              <div key={c.id} className="flex justify-between items-center">
+                <span>
+                  {c.name} x{c.quantity}
+                  {c.isPo && <span className="ml-2 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] text-amber-300">PO</span>}
+                </span>
                 <span>{(Number(c.base_price) * c.quantity).toLocaleString('id-ID')}</span>
               </div>
             ))}

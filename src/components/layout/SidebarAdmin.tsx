@@ -12,6 +12,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/admin/warehouse', label: 'Warehouse', permission: 'menu:warehouse' },
   { href: '/admin/weapons', label: 'Weapons', permission: 'menu:weapons' },
   { href: '/admin/weapon-relations', label: 'Weapon Relations', permission: 'menu:weapons' },
+  { href: '/admin/po-products', label: 'PO', permission: 'menu:po' },
   { href: '/admin/orders', label: 'Pending Orders', permission: 'menu:orders' },
   { href: '/admin/orders-history', label: 'Orders History', permission: 'menu:orders-history' },
   { href: '/admin/users', label: 'Users', permission: 'menu:users' },

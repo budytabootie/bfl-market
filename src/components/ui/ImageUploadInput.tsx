@@ -6,7 +6,7 @@ import clsx from 'clsx';
 type ImageUploadInputProps = {
   value: File | null;
   onChange: (file: File | null) => void;
-  inputRef?: React.RefObject<HTMLInputElement>;
+  inputRef?: React.RefObject<HTMLInputElement | null>;
   accept?: string;
   className?: string;
   disabled?: boolean;
