@@ -143,7 +143,6 @@ export default function AdminPoProductsPage() {
                     </td>
                     <td className="p-2">
                       <Button
-                        size="sm"
                         variant={isPo ? 'secondary' : 'primary'}
                         onClick={() => togglePo(r.id)}
                         disabled={toggling === r.id}
