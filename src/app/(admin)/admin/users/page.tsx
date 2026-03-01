@@ -49,6 +49,8 @@ export default function AdminUsersPage() {
 
   const [resettingId, setResettingId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [dmChannelId, setDmChannelId] = useState('');
+  const [dmSetupLoading, setDmSetupLoading] = useState(false);
   const showToast = useCallback((message: string, type: 'success' | 'error') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 4000);
@@ -190,7 +192,7 @@ export default function AdminUsersPage() {
       {toast && (
         <div
           role="alert"
-          className={`fixed top-4 right-4 z-[100] rounded-xl px-4 py-3 shadow-lg text-sm font-medium ${
+          className={`fixed top-4 right-4 z-100 rounded-xl px-4 py-3 shadow-lg text-sm font-medium ${
             toast.type === 'success' ? 'bg-emerald-600 text-white border border-emerald-500/50' : 'bg-red-600 text-white border border-red-500/50'
           }`}
         >
@@ -206,6 +208,43 @@ export default function AdminUsersPage() {
         </div>
       )}
     <div className="space-y-6">
+      <Card title="Setup Channel Aktifasi DM">
+        <p className="text-xs text-slate-400 mb-3">
+          Buat channel khusus di Discord, paste Channel ID di bawah, lalu klik Post. User bisa klik tombol &quot;Aktifkan DM&quot; untuk membuka DM dengan bot agar bisa terima notifikasi reset password.
+        </p>
+        <p className="text-[11px] text-slate-500 mb-2">
+          Channel ID: Developer Mode ON → klik kanan channel → Copy Channel ID. Wajib set Interactions Endpoint URL di Discord Developer Portal → Application → General Information: <code className="text-slate-400">https://your-app.vercel.app/api/discord/interactions</code> dan env DISCORD_PUBLIC_KEY.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <input
+            className="rounded-xl border border-slate-700 bg-slate-900/60 px-3 py-2 text-sm min-w-[200px]"
+            placeholder="Channel ID (angka panjang)"
+            value={dmChannelId}
+            onChange={(e) => setDmChannelId(e.target.value)}
+          />
+          <Button
+            variant="secondary"
+            disabled={dmSetupLoading || !dmChannelId.trim()}
+            onClick={async () => {
+              setDmSetupLoading(true);
+              const res = await fetch('/api/admin/discord/setup-dm-channel', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ channelId: dmChannelId.trim() }),
+              });
+              const data = await res.json().catch(() => ({}));
+              setDmSetupLoading(false);
+              if (res.ok) {
+                showToast('Pesan dengan tombol berhasil dipost ke channel.', 'success');
+              } else {
+                showToast(data.error ?? 'Gagal post', 'error');
+              }
+            }}
+          >
+            {dmSetupLoading ? 'Posting…' : 'Post ke Channel'}
+          </Button>
+        </div>
+      </Card>
       <Card title="Create User">
         <p className="mb-3 text-xs text-slate-400">Password 6 digit akan di-generate otomatis dan dikirim via Discord DM (wajib isi Discord ID).</p>
         <form onSubmit={handleCreate} className="flex flex-wrap gap-3">
