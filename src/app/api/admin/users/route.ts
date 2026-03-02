@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { logActivity } from '@/lib/activity';
 
 export const runtime = 'nodejs';
 
@@ -80,6 +81,8 @@ export async function POST(request: Request) {
     `**Link:** ${loginUrl}`,
   ].join('\n');
 
+  await logActivity(supabaseAuth, 'users.create', 'users', uid, { username: String(username).trim().toLowerCase(), name: String(name).trim(), role_id });
+
   try {
     await fetch(`${siteUrl}/api/discord/notify`, {
       method: 'POST',
@@ -119,13 +122,13 @@ async function requireAdmin() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     serviceKey,
   );
-  return { supabase, userId: user.id };
+  return { supabase, supabaseAuth, userId: user.id };
 }
 
 export async function PATCH(request: Request) {
   const auth = await requireAdmin();
   if (auth.error) return auth.error;
-  const { supabase } = auth;
+  const { supabase, supabaseAuth } = auth;
 
   const body = await request.json().catch(() => null);
   const { id, name, username, role_id, discord_id } = body ?? {};
@@ -147,19 +150,21 @@ export async function PATCH(request: Request) {
   }).eq('id', id);
 
   if (dbErr) return NextResponse.json({ error: dbErr.message }, { status: 400 });
+  await logActivity(supabaseAuth, 'users.update', 'users', id, { username: String(username).trim().toLowerCase(), name: String(name).trim(), role_id });
   return NextResponse.json({ ok: true });
 }
 
 export async function DELETE(request: Request) {
   const auth = await requireAdmin();
   if (auth.error) return auth.error;
-  const { supabase, userId } = auth;
+  const { supabase, supabaseAuth, userId } = auth;
 
   const { searchParams } = new URL(request.url);
   const id = searchParams.get('id');
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
   if (id === userId) return NextResponse.json({ error: 'Tidak dapat menghapus akun sendiri' }, { status: 400 });
 
+  const { data: targetUser } = await supabase.from('users').select('username').eq('id', id).single();
   const { count } = await supabase.from('orders').select('*', { count: 'exact', head: true }).eq('user_id', id);
   if ((count ?? 0) > 0) {
     return NextResponse.json({ error: 'User memiliki order, tidak dapat dihapus' }, { status: 400 });
@@ -167,5 +172,6 @@ export async function DELETE(request: Request) {
 
   const { error } = await supabase.auth.admin.deleteUser(id);
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  await logActivity(supabaseAuth, 'users.delete', 'users', id, { username: (targetUser as { username?: string })?.username });
   return NextResponse.json({ ok: true });
 }

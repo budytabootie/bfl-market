@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { logActivity } from '@/lib/activity';
 import { Input } from '@/components/ui/Input';
 import Link from 'next/link';
 
@@ -120,10 +121,13 @@ export default function AdminPoWeeklyPage() {
   async function toggleProduct(poProductId: string) {
     if (!weekStart) return;
     const isSelected = selectedForWeek.has(poProductId);
+    const pp = poProducts.find((p) => p.id === poProductId);
+    const itemName = pp?.catalog?.name;
     if (isSelected) {
       const rec = weekly.get(poProductId);
       if (rec) {
         await supabase.from('po_weekly_availability').delete().eq('id', rec.id);
+        await logActivity(supabase, 'po_weekly.toggle_off', 'po_weekly_availability', rec.id, { week_start: weekStart, item_name: itemName });
         setWeekly((prev) => {
           const n = new Map(prev);
           n.delete(poProductId);
@@ -145,6 +149,7 @@ export default function AdminPoWeeklyPage() {
         .single();
       if (data) {
         setWeekly((prev) => new Map(prev).set(poProductId, { id: (data as { id: string }).id, max_quantity: maxQty }));
+        await logActivity(supabase, 'po_weekly.toggle_on', 'po_weekly_availability', (data as { id: string }).id, { week_start: weekStart, max_quantity: maxQty, item_name: itemName });
       }
     }
   }
@@ -155,10 +160,12 @@ export default function AdminPoWeeklyPage() {
     for (const [poProductId, rec] of weekly) {
       const maxVal = maxQuantities[poProductId];
       const maxQty = maxVal === '' || maxVal === undefined ? null : Math.max(0, parseInt(maxVal, 10) || 0);
+      const pp = poProducts.find((p) => p.id === poProductId);
       await supabase
         .from('po_weekly_availability')
         .update({ max_quantity: maxQty })
         .eq('id', rec.id);
+      await logActivity(supabase, 'po_weekly.save_max_qty', 'po_weekly_availability', rec.id, { week_start: weekStart, max_quantity: maxQty, item_name: pp?.catalog?.name });
     }
     setSaving(false);
   }

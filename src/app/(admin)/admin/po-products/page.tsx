@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { logActivity } from '@/lib/activity';
 import { TableToolbar } from '@/components/ui/TableToolbar';
 import Link from 'next/link';
 
@@ -68,12 +69,19 @@ export default function AdminPoProductsPage() {
   async function togglePo(catalogId: string) {
     setToggling(catalogId);
     const isPo = poProductIds.has(catalogId);
+    const itemName = catalog.find((c) => c.id === catalogId)?.name;
     if (isPo) {
       const { error } = await supabase.from('po_products').delete().eq('catalog_id', catalogId);
-      if (!error) setPoProductIds((prev) => { const n = new Set(prev); n.delete(catalogId); return n; });
+      if (!error) {
+        setPoProductIds((prev) => { const n = new Set(prev); n.delete(catalogId); return n; });
+        await logActivity(supabase, 'po_products.remove', 'po_products', catalogId, { catalog_id: catalogId, item_name: itemName });
+      }
     } else {
-      const { error } = await supabase.from('po_products').insert({ catalog_id: catalogId });
-      if (!error) setPoProductIds((prev) => new Set([...prev, catalogId]));
+      const { data, error } = await supabase.from('po_products').insert({ catalog_id: catalogId }).select('id').single();
+      if (!error && data) {
+        setPoProductIds((prev) => new Set([...prev, catalogId]));
+        await logActivity(supabase, 'po_products.add', 'po_products', (data as { id: string }).id, { catalog_id: catalogId, item_name: itemName });
+      }
     }
     setToggling(null);
   }

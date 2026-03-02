@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { logActivity } from '@/lib/activity';
 
 export const runtime = 'nodejs';
 
@@ -57,6 +58,8 @@ export async function POST(request: Request) {
   }
 
   await supabase.from('users').update({ must_change_password: true, updated_at: new Date().toISOString() }).eq('id', id);
+
+  await logActivity(supabaseAuth, 'users.reset_password', 'users', id, { username: (userRow.username as string) ?? '' });
 
   const siteUrl = process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin;
   const loginUrl = `${siteUrl}/login`;

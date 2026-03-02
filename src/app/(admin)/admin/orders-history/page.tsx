@@ -36,31 +36,42 @@ export default function AdminOrdersHistoryPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
-  const [filterPo, setFilterPo] = useState<'all' | 'po' | 'regular'>('all');
-  const [page, setPage] = useState(1);
+  const [pageRegular, setPageRegular] = useState(1);
+  const [pagePo, setPagePo] = useState(1);
   const PAGE_SIZE = 10;
 
-  const filteredOrders = useMemo(() => {
-    let r = orders;
+  const filterBySearch = (r: Order[]) => {
     const q = search.trim().toLowerCase();
-    if (q) {
-      r = r.filter((o) => {
-        const u = (o.users as { username?: string; name?: string }) ?? {};
-        const username = (u.username ?? '').toLowerCase();
-        const name = (u.name ?? '').toLowerCase();
-        return username.includes(q) || name.includes(q);
-      });
-    }
-    if (filterStatus) r = r.filter((o) => o.status === filterStatus);
-    if (filterPo === 'po') r = r.filter((o) => items.some((i) => i.order_id === o.id && i.is_po));
-    if (filterPo === 'regular') r = r.filter((o) => !items.some((i) => i.order_id === o.id && i.is_po));
-    return r;
-  }, [orders, search, filterStatus, filterPo, items]);
+    if (!q) return r;
+    return r.filter((o) => {
+      const u = (o.users as { username?: string; name?: string }) ?? {};
+      const username = (u.username ?? '').toLowerCase();
+      const name = (u.name ?? '').toLowerCase();
+      return username.includes(q) || name.includes(q);
+    });
+  };
 
-  const paginatedOrders = useMemo(() => {
-    const from = (page - 1) * PAGE_SIZE;
-    return filteredOrders.slice(from, from + PAGE_SIZE);
-  }, [filteredOrders, page]);
+  const regularOrders = useMemo(() => {
+    let r = orders.filter((o) => !items.some((i) => i.order_id === o.id && i.is_po));
+    if (filterStatus) r = r.filter((o) => o.status === filterStatus);
+    return filterBySearch(r);
+  }, [orders, search, filterStatus, items]);
+
+  const poOrders = useMemo(() => {
+    let r = orders.filter((o) => items.some((i) => i.order_id === o.id && i.is_po));
+    if (filterStatus) r = r.filter((o) => o.status === filterStatus);
+    return filterBySearch(r);
+  }, [orders, search, filterStatus, items]);
+
+  const paginatedRegular = useMemo(() => {
+    const from = (pageRegular - 1) * PAGE_SIZE;
+    return regularOrders.slice(from, from + PAGE_SIZE);
+  }, [regularOrders, pageRegular]);
+
+  const paginatedPo = useMemo(() => {
+    const from = (pagePo - 1) * PAGE_SIZE;
+    return poOrders.slice(from, from + PAGE_SIZE);
+  }, [poOrders, pagePo]);
 
   useEffect(() => {
     void (async () => {
@@ -108,20 +119,79 @@ export default function AdminOrdersHistoryPage() {
       </Card>
     );
 
+  function renderOrderCard(o: Order) {
+    const orderItems = itemsByOrder(o.id);
+    const totalApproved = totalApprovedByOrder(o.id);
+    const buyer = (o.users as { username?: string; name?: string }) ?? {};
+    const approverData = (o.approver as { username?: string; name?: string }) ?? null;
+    return (
+      <div key={o.id} className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+          <span className="font-mono text-slate-500">{o.id.slice(0, 8)}…</span>
+          <span>{new Date(o.created_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+          <span className="text-slate-300">Order oleh: <strong>{buyer.username ?? buyer.name ?? '-'}</strong></span>
+          <span className={`rounded px-2 py-0.5 text-xs capitalize ${o.status === 'completed' ? 'bg-emerald-500/20 text-emerald-400' : o.status === 'cancelled' ? 'bg-red-500/20 text-red-400' : 'bg-amber-500/20 text-amber-400'}`}>
+            {o.status}
+          </span>
+        </div>
+        <div className="mt-3 overflow-x-auto text-xs">
+          <table className="w-full">
+            <thead>
+              <tr className="text-slate-400">
+                <th className="p-2 text-left">Item</th>
+                <th className="p-2 text-right">Qty</th>
+                <th className="p-2 text-center">Tipe</th>
+                <th className="p-2 text-right">Harga</th>
+                <th className="p-2 text-right">Subtotal</th>
+                <th className="p-2 text-center">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {orderItems.map((i) => (
+                <tr key={i.id} className="border-t border-slate-800">
+                  <td className="p-2">{(i.catalog as { name?: string })?.name ?? '-'}</td>
+                  <td className="p-2 text-right">{i.quantity}</td>
+                  <td className="p-2 text-center">
+                    {i.is_po ? <span className="rounded px-2 py-0.5 text-[11px] bg-amber-500/20 text-amber-300">PO</span> : <span className="text-slate-500">Regular</span>}
+                  </td>
+                  <td className="p-2 text-right">{Number(i.price_each).toLocaleString('id-ID')}</td>
+                  <td className="p-2 text-right">{Number(i.subtotal).toLocaleString('id-ID')}</td>
+                  <td className="p-2 text-center">
+                    <span className={`inline-block rounded px-2 py-0.5 capitalize ${i.status === 'approved' ? 'bg-emerald-500/20 text-emerald-400' : i.status === 'rejected' ? 'bg-red-500/20 text-red-400' : i.status === 'processed' ? 'bg-blue-500/20 text-blue-400' : 'bg-slate-600 text-slate-300'}`}>
+                      {i.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-1 border-t border-slate-800 pt-3 text-sm">
+          <span className="font-semibold text-emerald-400">Total approved: Rp {totalApproved.toLocaleString('id-ID')}</span>
+          {approverData && (approverData.username || approverData.name) ? (
+            <span className="text-slate-400">Approved oleh: <span className="text-slate-200">{approverData.username ?? approverData.name}</span></span>
+          ) : (
+            <span className="text-slate-500">Belum ada approver</span>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="rounded-2xl border border-slate-800/80 bg-slate-900/40 p-5">
         <h1 className="text-xl font-semibold text-slate-50">Orders History</h1>
         <p className="mt-1 text-sm text-slate-400">
-          Riwayat semua order: kapan dibeli, siapa yang order, item (approved &
-          rejected), total tagihan approved, dan siapa yang melakukan approve.
+          Riwayat order Reguler dan PO. Filter status berlaku untuk kedua bagian.
         </p>
       </div>
-      <Card title="Semua Order">
+
+      <Card title="Order Reguler" className="border-slate-700/80">
         <TableToolbar
           searchPlaceholder="Cari username pembeli…"
           searchValue={search}
-          onSearchChange={(v) => { setSearch(v); setPage(1); }}
+          onSearchChange={(v) => { setSearch(v); setPageRegular(1); setPagePo(1); }}
           filters={[
             {
               label: 'Status:',
@@ -132,147 +202,57 @@ export default function AdminOrdersHistoryPage() {
                 { value: 'cancelled', label: 'Cancelled' },
               ],
               value: filterStatus,
-              onChange: (v) => { setFilterStatus(v); setPage(1); },
-            },
-            {
-              label: 'Tipe:',
-              options: [
-                { value: 'all', label: 'Semua' },
-                { value: 'po', label: 'Hanya PO' },
-                { value: 'regular', label: 'Hanya Regular' },
-              ],
-              value: filterPo,
-              onChange: (v) => { setFilterPo(v as 'all' | 'po' | 'regular'); setPage(1); },
+              onChange: (v) => { setFilterStatus(v); setPageRegular(1); setPagePo(1); },
             },
           ]}
-          totalCount={filteredOrders.length}
-          page={page}
+          totalCount={regularOrders.length}
+          page={pageRegular}
           pageSize={PAGE_SIZE}
-          onPageChange={setPage}
+          onPageChange={setPageRegular}
         />
-        {filteredOrders.length === 0 ? (
-          <div className="py-8 text-center">
-            <p className="text-slate-400">Belum ada order.</p>
-          </div>
+        {regularOrders.length === 0 ? (
+          <div className="py-8 text-center"><p className="text-slate-400">Belum ada order reguler.</p></div>
         ) : (
           <div className="space-y-4">
-            {paginatedOrders.map((o) => {
-              const orderItems = itemsByOrder(o.id);
-              const totalApproved = totalApprovedByOrder(o.id);
-              const buyer = (o.users as { username?: string; name?: string }) ?? {};
-              const approverData = (o.approver as { username?: string; name?: string }) ?? null;
-              return (
-                <div
-                  key={o.id}
-                  className="rounded-xl border border-slate-800 bg-slate-900/60 p-4"
-                >
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-                    <span className="font-mono text-slate-500">
-                      {o.id.slice(0, 8)}…
-                    </span>
-                    <span>
-                      {new Date(o.created_at).toLocaleString('id-ID', {
-                        dateStyle: 'medium',
-                        timeStyle: 'short',
-                      })}
-                    </span>
-                    <span className="text-slate-300">
-                      Order oleh: <strong>{buyer.username ?? buyer.name ?? '-'}</strong>
-                    </span>
-                    <span
-                      className={`rounded px-2 py-0.5 text-xs capitalize ${
-                        o.status === 'completed'
-                          ? 'bg-emerald-500/20 text-emerald-400'
-                          : o.status === 'cancelled'
-                            ? 'bg-red-500/20 text-red-400'
-                            : 'bg-amber-500/20 text-amber-400'
-                      }`}
-                    >
-                      {o.status}
-                    </span>
-                  </div>
-
-                  <div className="mt-3 overflow-x-auto text-xs">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="text-slate-400">
-                          <th className="p-2 text-left">Item</th>
-                          <th className="p-2 text-right">Qty</th>
-                          <th className="p-2 text-center">Tipe</th>
-                          <th className="p-2 text-right">Harga</th>
-                          <th className="p-2 text-right">Subtotal</th>
-                          <th className="p-2 text-center">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {orderItems.map((i) => (
-                          <tr
-                            key={i.id}
-                            className="border-t border-slate-800"
-                          >
-                            <td className="p-2">
-                              {(i.catalog as { name?: string })?.name ?? '-'}
-                            </td>
-                            <td className="p-2 text-right">{i.quantity}</td>
-                            <td className="p-2 text-center">
-                              {i.is_po ? (
-                                <span className="rounded px-2 py-0.5 text-[11px] bg-amber-500/20 text-amber-300">PO</span>
-                              ) : (
-                                <span className="text-slate-500">Regular</span>
-                              )}
-                            </td>
-                            <td className="p-2 text-right">
-                              {Number(i.price_each).toLocaleString('id-ID')}
-                            </td>
-                            <td className="p-2 text-right">
-                              {Number(i.subtotal).toLocaleString('id-ID')}
-                            </td>
-                            <td className="p-2 text-center">
-                              <span
-                                className={`inline-block rounded px-2 py-0.5 capitalize ${
-                                  i.status === 'approved'
-                                    ? 'bg-emerald-500/20 text-emerald-400'
-                                    : i.status === 'rejected'
-                                      ? 'bg-red-500/20 text-red-400'
-                                      : i.status === 'processed'
-                                        ? 'bg-blue-500/20 text-blue-400'
-                                        : 'bg-slate-600 text-slate-300'
-                                }`}
-                              >
-                                {i.status}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-1 border-t border-slate-800 pt-3 text-sm">
-                    <span className="font-semibold text-emerald-400">
-                      Total approved: Rp {totalApproved.toLocaleString('id-ID')}
-                    </span>
-                    {approverData && (approverData.username || approverData.name) ? (
-                      <span className="text-slate-400">
-                        Approved oleh:{' '}
-                        <span className="text-slate-200">
-                          {approverData.username ?? approverData.name}
-                        </span>
-                      </span>
-                    ) : (
-                      <span className="text-slate-500">Belum ada approver</span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+            {paginatedRegular.map((o) => renderOrderCard(o))}
           </div>
         )}
       </Card>
+
+      <Card title="Order PO" className="border-amber-500/30 bg-amber-950/10">
+        <TableToolbar
+          searchPlaceholder="Cari username pembeli…"
+          searchValue={search}
+          onSearchChange={(v) => { setSearch(v); setPageRegular(1); setPagePo(1); }}
+          filters={[
+            {
+              label: 'Status:',
+              options: [
+                { value: '', label: 'Semua' },
+                { value: 'pending', label: 'Pending' },
+                { value: 'completed', label: 'Completed' },
+                { value: 'cancelled', label: 'Cancelled' },
+              ],
+              value: filterStatus,
+              onChange: (v) => { setFilterStatus(v); setPageRegular(1); setPagePo(1); },
+            },
+          ]}
+          totalCount={poOrders.length}
+          page={pagePo}
+          pageSize={PAGE_SIZE}
+          onPageChange={setPagePo}
+        />
+        {poOrders.length === 0 ? (
+          <div className="py-8 text-center"><p className="text-slate-400">Belum ada order PO.</p></div>
+        ) : (
+          <div className="space-y-4">
+            {paginatedPo.map((o) => renderOrderCard(o))}
+          </div>
+        )}
+      </Card>
+
       <p className="text-center text-sm text-slate-500">
-        <Link href="/admin/orders" className="text-bfl-primary hover:underline">
-          ← Ke Pending Orders (approve/reject)
-        </Link>
+        <Link href="/admin/orders" className="text-bfl-primary hover:underline">← Ke Pending Orders</Link>
       </p>
     </div>
   );

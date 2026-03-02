@@ -3,7 +3,7 @@ import { updateSession } from '@/lib/supabase/middleware';
 
 const PUBLIC_PATHS = ['/login'];
 const ADMIN_PATHS = ['/admin'];
-const USER_PANEL_PATHS = ['/marketplace', '/cart', '/checkout', '/orders', '/settings'];
+const USER_PANEL_PATHS = ['/marketplace', '/cart', '/checkout', '/orders', '/settings', '/po'];
 
 const CHANGE_PASSWORD_PATH = '/change-password';
 

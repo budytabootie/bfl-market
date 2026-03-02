@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { logActivity } from '@/lib/activity';
 import { Select } from '@/components/ui/Select';
 import Link from 'next/link';
 
@@ -40,6 +41,7 @@ export default function AdminPoSettingsPage() {
       { key: 'po_week_start_day', value: weekStartDay, updated_at: new Date().toISOString() },
       { onConflict: 'key' }
     );
+    await logActivity(supabase, 'po_settings.save_week_start', 'app_settings', 'po_week_start_day', { week_start_day: weekStartDay });
     setSaving(false);
   }
 

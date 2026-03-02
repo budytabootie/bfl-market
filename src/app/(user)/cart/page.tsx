@@ -66,7 +66,12 @@ export default function CartPage() {
       </div>
       <Card title="Cart">
         {cart.length === 0 ? (
-          <p className="text-slate-400">Cart kosong. <Link href="/marketplace" className="text-bfl-primary hover:underline">Belanja</Link></p>
+          <p className="text-slate-400">
+            Cart kosong.{' '}
+            <Link href="/marketplace" className="text-bfl-primary hover:underline">Belanja</Link>
+            {' atau '}
+            <Link href="/po" className="text-amber-400 hover:underline">barang PO</Link>
+          </p>
         ) : (
           <>
             <div className="overflow-x-auto text-xs">

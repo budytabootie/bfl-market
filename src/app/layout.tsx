@@ -2,8 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'GTA RP Dashboard',
-  description: 'Dashboard Management & Ordering GTA RP',
+  title: 'BFL Market',
+  description: 'Tempat Anak BFL beli Prepare an',
 };
 
 export const dynamic = 'force-dynamic';

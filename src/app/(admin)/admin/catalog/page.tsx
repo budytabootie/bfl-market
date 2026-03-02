@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent, useRef, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { logActivity } from '@/lib/activity';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { ImageUploadInput } from '@/components/ui/ImageUploadInput';
@@ -126,6 +127,7 @@ export default function AdminCatalogPage() {
         setError(`Upload gambar: ${msg}. Pastikan bucket "catalog-images" sudah dibuat di Supabase Dashboard > Storage.`);
       }
     }
+    await logActivity(supabase, 'catalog.create', 'catalog', id, { name, category });
     setName('');
     setBasePrice(0);
     setStatus('active');
@@ -173,6 +175,7 @@ export default function AdminCatalogPage() {
       setError(updateErr.message);
       return;
     }
+    await logActivity(supabase, 'catalog.update', 'catalog', editing.id, { name: editName, category: editCategory });
     setEditing(null);
     load();
   }
@@ -193,11 +196,14 @@ export default function AdminCatalogPage() {
       setError(delErr.message);
       return;
     }
+    await logActivity(supabase, 'catalog.delete', 'catalog', r.id, { name: r.name });
     load();
   }
 
   async function toggleStatus(id: string, s: string) {
-    await supabase.from('catalog').update({ status: s === 'active' ? 'inactive' : 'active' }).eq('id', id);
+    const newStatus = s === 'active' ? 'inactive' : 'active';
+    await supabase.from('catalog').update({ status: newStatus }).eq('id', id);
+    await logActivity(supabase, 'catalog.toggle_status', 'catalog', id, { status: newStatus });
     load();
   }
 

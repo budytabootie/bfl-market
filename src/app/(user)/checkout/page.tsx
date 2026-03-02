@@ -31,7 +31,7 @@ export default function CheckoutPage() {
         const catalogItems = (data ?? []) as { id: string; name: string; base_price: number }[];
         setCart(entries.map((x) => {
           const item = catalogItems.find((i) => i.id === x.id);
-          return item ? { ...item, quantity: x.qty, isPo: Boolean(x.isPo) } : null;
+          return item ? { ...item, quantity: x.qty } : null;
         }).filter(Boolean) as CartItem[]);
       } finally {
         setLoading(false);
@@ -50,10 +50,11 @@ export default function CheckoutPage() {
     if (poIds.length > 0) {
       const { data: weekStart } = await supabase.rpc('get_current_po_week');
       if (weekStart) {
+        const weekStr = String(weekStart).slice(0, 10);
         const { data: weekly } = await supabase
           .from('po_weekly_availability')
           .select('po_product_id')
-          .eq('week_start', String(weekStart));
+          .eq('week_start', weekStr);
         const poProductIds = ((weekly ?? []) as { po_product_id: string }[]).map((w) => w.po_product_id);
         let validCatalogIds = new Set<string>();
         if (poProductIds.length > 0) {
@@ -101,7 +102,7 @@ export default function CheckoutPage() {
       price_each: c.base_price,
       subtotal: c.base_price * c.quantity,
       status: 'pending',
-      is_po: c.isPo,
+      is_po: false,
     }));
     const { error: itemsErr } = await supabase.from('order_items').insert(items);
     if (itemsErr) {

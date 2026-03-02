@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { logActivity } from '@/lib/activity';
 import { TableToolbar } from '@/components/ui/TableToolbar';
 
 type Order = {
@@ -30,23 +31,33 @@ export default function AdminOrdersPage() {
   const [items, setItems] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [filterPo, setFilterPo] = useState<'all' | 'po' | 'regular'>('all');
-  const [page, setPage] = useState(1);
+  const [pageRegular, setPageRegular] = useState(1);
+  const [pagePo, setPagePo] = useState(1);
   const PAGE_SIZE = 5;
 
-  const filteredPending = useMemo(() => {
-    let r = pending;
+  const regularOrders = useMemo(() => {
+    let r = pending.filter((o) => !items.some((i) => i.order_id === o.id && i.is_po));
     const q = search.trim().toLowerCase();
     if (q) r = r.filter((o) => ((o.users as { username?: string })?.username ?? '').toLowerCase().includes(q));
-    if (filterPo === 'po') r = r.filter((o) => items.some((i) => i.order_id === o.id && i.is_po));
-    if (filterPo === 'regular') r = r.filter((o) => !items.some((i) => i.order_id === o.id && i.is_po));
     return r;
-  }, [pending, search, filterPo, items]);
+  }, [pending, search, items]);
 
-  const paginatedPending = useMemo(() => {
-    const from = (page - 1) * PAGE_SIZE;
-    return filteredPending.slice(from, from + PAGE_SIZE);
-  }, [filteredPending, page]);
+  const poOrders = useMemo(() => {
+    let r = pending.filter((o) => items.some((i) => i.order_id === o.id && i.is_po));
+    const q = search.trim().toLowerCase();
+    if (q) r = r.filter((o) => ((o.users as { username?: string })?.username ?? '').toLowerCase().includes(q));
+    return r;
+  }, [pending, search, items]);
+
+  const paginatedRegular = useMemo(() => {
+    const from = (pageRegular - 1) * PAGE_SIZE;
+    return regularOrders.slice(from, from + PAGE_SIZE);
+  }, [regularOrders, pageRegular]);
+
+  const paginatedPo = useMemo(() => {
+    const from = (pagePo - 1) * PAGE_SIZE;
+    return poOrders.slice(from, from + PAGE_SIZE);
+  }, [poOrders, pagePo]);
 
   async function load() {
     const { data: ord } = await supabase
@@ -73,12 +84,16 @@ export default function AdminOrdersPage() {
   }, []);
 
   async function approveItem(id: string) {
+    const item = items.find((i) => i.id === id);
     await supabase.from('order_items').update({ status: 'approved' }).eq('id', id);
+    await logActivity(supabase, 'order_item.approve', 'order_items', id, { order_id: item?.order_id, item_name: (item?.catalog as { name?: string })?.name, is_po: item?.is_po });
     load();
   }
 
   async function rejectItem(id: string) {
+    const item = items.find((i) => i.id === id);
     await supabase.from('order_items').update({ status: 'rejected' }).eq('id', id);
+    await logActivity(supabase, 'order_item.reject', 'order_items', id, { order_id: item?.order_id, item_name: (item?.catalog as { name?: string })?.name, is_po: item?.is_po });
     load();
   }
 
@@ -89,32 +104,10 @@ export default function AdminOrdersPage() {
 
   if (loading) return <Card title="Pending Orders"><p className="text-slate-400">Loading…</p></Card>;
 
-  return (
-    <div className="space-y-6">
-      <Card title="Pending Orders">
-        <TableToolbar
-          searchPlaceholder="Cari username…"
-          searchValue={search}
-          onSearchChange={(v) => { setSearch(v); setPage(1); }}
-          filters={[
-            {
-              label: 'Tipe:',
-              options: [
-                { value: 'all', label: 'Semua' },
-                { value: 'po', label: 'Hanya PO' },
-                { value: 'regular', label: 'Hanya Regular' },
-              ],
-              value: filterPo,
-              onChange: (v) => { setFilterPo(v as 'all' | 'po' | 'regular'); setPage(1); },
-            },
-          ]}
-          totalCount={filteredPending.length}
-          page={page}
-          pageSize={PAGE_SIZE}
-          onPageChange={setPage}
-        />
-        <div className="space-y-4">
-          {paginatedPending.map((o) => {
+  function renderOrderList(orders: Order[], page: number, setPage: (n: number) => void) {
+    return (
+      <div className="space-y-4">
+        {orders.map((o) => {
             const orderItems = items.filter((i) => i.order_id === o.id);
             const hasApproved = orderItems.some((i) => i.status === 'approved');
             return (
@@ -170,7 +163,44 @@ export default function AdminOrdersPage() {
               </div>
             );
           })}
-        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-8">
+      <Card title="Order Reguler" className="border-slate-700/80">
+        <TableToolbar
+          searchPlaceholder="Cari username…"
+          searchValue={search}
+          onSearchChange={(v) => { setSearch(v); setPageRegular(1); setPagePo(1); }}
+          totalCount={regularOrders.length}
+          page={pageRegular}
+          pageSize={PAGE_SIZE}
+          onPageChange={setPageRegular}
+        />
+        {regularOrders.length === 0 ? (
+          <p className="py-6 text-center text-slate-500 text-sm">Belum ada order reguler.</p>
+        ) : (
+          renderOrderList(paginatedRegular, pageRegular, setPageRegular)
+        )}
+      </Card>
+
+      <Card title="Order PO" className="border-amber-500/30 bg-amber-950/10">
+        <TableToolbar
+          searchPlaceholder="Cari username…"
+          searchValue={search}
+          onSearchChange={(v) => { setSearch(v); setPageRegular(1); setPagePo(1); }}
+          totalCount={poOrders.length}
+          page={pagePo}
+          pageSize={PAGE_SIZE}
+          onPageChange={setPagePo}
+        />
+        {poOrders.length === 0 ? (
+          <p className="py-6 text-center text-slate-500 text-sm">Belum ada order PO.</p>
+        ) : (
+          renderOrderList(paginatedPo, pagePo, setPagePo)
+        )}
       </Card>
     </div>
   );

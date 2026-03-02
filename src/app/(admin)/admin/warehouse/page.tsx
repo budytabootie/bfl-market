@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { logActivity } from '@/lib/activity';
 import { TableToolbar } from '@/components/ui/TableToolbar';
 
 type CatalogItem = { id: string; name: string; category: string };
@@ -49,11 +50,15 @@ export default function AdminWarehousePage() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    const catalogItem = catalog.find((c) => c.id === catalogId);
     const existing = items.find((i) => i.catalog_id === catalogId);
     if (existing) {
-      await supabase.from('warehouse_items').update({ quantity: existing.quantity + quantity }).eq('id', existing.id);
+      const newQty = existing.quantity + quantity;
+      await supabase.from('warehouse_items').update({ quantity: newQty }).eq('id', existing.id);
+      await logActivity(supabase, 'warehouse.add_stock', 'warehouse_items', existing.id, { catalog_id: catalogId, quantity: newQty, item_name: catalogItem?.name });
     } else {
-      await supabase.from('warehouse_items').insert({ catalog_id: catalogId, quantity });
+      const { data } = await supabase.from('warehouse_items').insert({ catalog_id: catalogId, quantity }).select('id').single();
+      if (data) await logActivity(supabase, 'warehouse.add_stock', 'warehouse_items', (data as { id: string }).id, { catalog_id: catalogId, quantity, item_name: catalogItem?.name });
     }
     setQuantity(0);
     setError(null);
@@ -64,12 +69,14 @@ export default function AdminWarehousePage() {
     if (newQty < 0) return;
     setUpdatingId(id);
     setError(null);
+    const item = items.find((i) => i.id === id);
     const { error: err } = await supabase.from('warehouse_items').update({ quantity: newQty }).eq('id', id);
     setUpdatingId(null);
     if (err) {
       setError(err.message);
       return;
     }
+    await logActivity(supabase, 'warehouse.update_quantity', 'warehouse_items', id, { quantity: newQty, item_name: (item?.catalog as { name?: string })?.name });
     load();
   }
 

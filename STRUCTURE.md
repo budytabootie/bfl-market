@@ -36,21 +36,25 @@ bfl-market/
 │   │       └── discord/notify/     # Discord DM placeholder
 │   ├── components/
 │   │   ├── layout/
-│   │   │   ├── Sidebar.tsx
+│   │   │   ├── SidebarAdmin.tsx
+│   │   │   ├── SidebarUser.tsx
 │   │   │   └── Topbar.tsx
 │   │   ├── auth/
-│   │   │   ├── LoginForm.tsx       # (replaced by login page)
 │   │   │   └── LogoutButton.tsx
 │   │   └── ui/
 │   │       ├── Button.tsx
-│   │       └── Card.tsx
+│   │       ├── Card.tsx
+│   │       ├── Input.tsx
+│   │       ├── Select.tsx
+│   │       ├── ImageUploadInput.tsx
+│   │       └── TableToolbar.tsx
 │   └── lib/
 │       ├── supabase/
 │       │   ├── client.ts
 │       │   ├── server.ts
 │       │   └── middleware.ts
-│       ├── auth.ts
-│       └── discord.ts
+│       ├── discord-dm.ts
+│       └── activity.ts
 ├── supabase/
 │   └── schema.sql                  # Full SQL setup
 ├── scripts/

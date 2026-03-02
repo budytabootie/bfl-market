@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { logActivity } from '@/lib/activity';
 import { TableToolbar } from '@/components/ui/TableToolbar';
 
 type CatalogItem = { id: string; name: string; category: string };
@@ -84,18 +85,23 @@ export default function AdminWeaponRelationsPage() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!relatedId || !weaponId) return;
-    await supabase.from('weapon_relations').insert({
+    const weaponName = weapons.find((w) => w.id === weaponId)?.name;
+    const relatedName = relatedList.find((r) => r.id === relatedId)?.name;
+    const { data } = await supabase.from('weapon_relations').insert({
       weapon_catalog_id: weaponId,
       related_catalog_id: relatedId,
       relation_type: relationType,
-    });
+    }).select('id').single();
+    if (data) await logActivity(supabase, 'weapon_relations.add', 'weapon_relations', (data as { id: string }).id, { weapon_name: weaponName, related_name: relatedName, relation_type: relationType });
     setRelatedId('');
     setWeaponId('');
     load();
   }
 
   async function remove(id: string) {
+    const rel = relations.find((r) => r.id === id);
     await supabase.from('weapon_relations').delete().eq('id', id);
+    await logActivity(supabase, 'weapon_relations.delete', 'weapon_relations', id, { weapon_name: (rel?.weapon as { name?: string })?.name, related_name: (rel?.related as { name?: string })?.name });
     load();
   }
 

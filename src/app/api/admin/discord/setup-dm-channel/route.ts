@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     data: { user },
   } = await supabaseAuth.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const { data: ok } = await supabaseAuth.rpc('is_superadmin_or_treasurer');
+  const { data: ok } = await supabaseAuth.rpc('is_superadmin');
   if (!ok) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const token = process.env.DISCORD_BOT_TOKEN;

@@ -32,7 +32,7 @@ export function SidebarAdmin({ permissions = [] }: SidebarAdminProps) {
         <div className="flex items-center gap-2">
           <div className="h-8 w-8 rounded-2xl bg-linear-to-tr from-bfl-primary to-bfl-accent shadow-lg" />
           <div>
-            <div className="text-xs font-semibold tracking-[0.2em] text-slate-500 uppercase">GTA RP</div>
+            <div className="text-xs font-semibold tracking-[0.2em] text-slate-500 uppercase">BFL MARKET</div>
             <div className="text-sm text-slate-300">Admin Panel</div>
           </div>
         </div>

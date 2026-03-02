@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { logActivity } from '@/lib/activity';
 import { TableToolbar } from '@/components/ui/TableToolbar';
 
 type CatalogWeapon = { id: string; name: string };
@@ -62,13 +63,17 @@ export default function AdminWeaponsPage() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    await supabase.from('warehouse_weapons').insert({ catalog_id: catalogId, serial_number: serial, status });
+    const catalogItem = catalog.find((c) => c.id === catalogId);
+    const { data } = await supabase.from('warehouse_weapons').insert({ catalog_id: catalogId, serial_number: serial, status }).select('id').single();
+    if (data) await logActivity(supabase, 'weapons.add', 'warehouse_weapons', (data as { id: string }).id, { catalog_id: catalogId, serial_number: serial, item_name: catalogItem?.name });
     setSerial('');
     load();
   }
 
   async function updateStatus(id: string, s: string) {
+    const item = weapons.find((w) => w.id === id);
     await supabase.from('warehouse_weapons').update({ status: s }).eq('id', id);
+    await logActivity(supabase, 'weapons.update_status', 'warehouse_weapons', id, { status: s, item_name: (item?.catalog as { name?: string })?.name });
     load();
   }
 

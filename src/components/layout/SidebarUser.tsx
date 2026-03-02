@@ -8,6 +8,7 @@ type NavItem = { href: string; label: string; permission?: string };
 
 const NAV_ITEMS: NavItem[] = [
   { href: '/marketplace', label: 'Marketplace', permission: 'menu:marketplace' },
+  { href: '/po', label: 'PO', permission: 'menu:marketplace' },
   { href: '/cart', label: 'Cart', permission: 'menu:marketplace' },
   { href: '/orders', label: 'My Orders', permission: 'menu:my-orders' },
   { href: '/settings', label: 'Settings', permission: 'menu:marketplace' },
