@@ -19,6 +19,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   vest: 'Vest',
   attachment: 'Attachment',
   weapon: 'Weapon',
+  barham: 'Barham',
 };
 
 function getWeekOptions(startDay = 1, count = 6): { value: string; label: string }[] {

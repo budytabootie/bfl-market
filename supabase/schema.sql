@@ -2,7 +2,7 @@
 -- Run in Supabase SQL Editor
 
 -- ENUMS
-create type public.catalog_category as enum ('ammo', 'vest', 'attachment', 'weapon');
+create type public.catalog_category as enum ('ammo', 'vest', 'attachment', 'weapon', 'barham');
 create type public.catalog_status as enum ('active', 'inactive');
 create type public.weapon_status as enum ('available', 'in_use', 'broken', 'lost', 'confiscated');
 create type public.order_status as enum ('pending', 'completed', 'cancelled');

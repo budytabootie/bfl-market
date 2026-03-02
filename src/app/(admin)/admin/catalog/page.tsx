@@ -19,7 +19,7 @@ type CatalogRow = {
   image_url: string | null;
 };
 
-const CATEGORIES = ['ammo', 'vest', 'attachment', 'weapon'] as const;
+const CATEGORIES = ['ammo', 'vest', 'attachment', 'weapon', 'barham'] as const;
 const STATUSES = ['active', 'inactive'] as const;
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -27,6 +27,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   vest: 'Vest',
   attachment: 'Attachment',
   weapon: 'Weapon',
+  barham: 'Barham',
 };
 
 export default function AdminCatalogPage() {
@@ -35,7 +36,7 @@ export default function AdminCatalogPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState('');
-  const [category, setCategory] = useState<(typeof CATEGORIES)[number]>('ammo');
+  const [category, setCategory] = useState<(typeof CATEGORIES)[number]>('barham');
   const [basePrice, setBasePrice] = useState(0);
   const [status, setStatus] = useState<(typeof STATUSES)[number]>('active');
   const [imageFile, setImageFile] = useState<File | null>(null);

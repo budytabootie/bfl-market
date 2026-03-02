@@ -119,6 +119,7 @@ export default function AdminWarehousePage() {
                 { value: 'ammo', label: 'Ammo' },
                 { value: 'vest', label: 'Vest' },
                 { value: 'attachment', label: 'Attachment' },
+                { value: 'barham', label: 'Barham' },
               ],
               value: filterCategory,
               onChange: (v) => { setFilterCategory(v); setPage(1); },

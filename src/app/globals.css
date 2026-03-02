@@ -55,3 +55,23 @@ body {
   @apply w-16 rounded-lg border border-slate-700/80 bg-slate-900/50 px-3 py-2 text-center text-sm text-slate-100 focus:border-bfl-primary/50 focus:outline-none focus:ring-2 focus:ring-bfl-primary/20;
 }
 
+/* Marketplace grid scroll - aesthetic scrollbar */
+.marketplace-grid-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(71, 85, 105, 0.6) transparent;
+}
+.marketplace-grid-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.marketplace-grid-scroll::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.4);
+  border-radius: 4px;
+}
+.marketplace-grid-scroll::-webkit-scrollbar-thumb {
+  background: rgba(71, 85, 105, 0.6);
+  border-radius: 4px;
+}
+.marketplace-grid-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.7);
+}
+

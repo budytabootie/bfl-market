@@ -12,7 +12,14 @@ type CatalogItem = { id: string; name: string; category: string; base_price: num
 type WeaponAddon = { id: string; name: string; base_price: number };
 type WeaponAddons = { attachments: WeaponAddon[]; ammo: WeaponAddon[] };
 
-const CATEGORIES = ['ammo', 'vest', 'attachment', 'weapon'] as const;
+const CATEGORIES = ['ammo', 'vest', 'attachment', 'weapon', 'barham'] as const;
+const CATEGORY_LABELS: Record<string, string> = {
+  ammo: 'Ammo',
+  vest: 'Vest',
+  attachment: 'Attachment',
+  weapon: 'Weapon',
+  barham: 'Barham',
+};
 const CART_KEY = 'bfl-cart';
 
 export default function PoMarketplacePage() {
@@ -38,6 +45,7 @@ export default function PoMarketplacePage() {
       }
     });
     localStorage.setItem(CART_KEY, JSON.stringify(cart));
+    window.dispatchEvent(new CustomEvent('cart-update'));
     router.push('/cart');
     router.refresh();
   }, [router]);
@@ -173,7 +181,7 @@ export default function PoMarketplacePage() {
               className={`rounded-lg px-4 py-2 text-xs font-medium capitalize transition-all ${filter === c ? 'bg-amber-500/20 text-amber-300 ring-1 ring-amber-500/30' : 'bg-slate-800/60 text-slate-400 hover:bg-slate-700/60 hover:text-slate-300'}`}
               onClick={() => setFilter(c)}
             >
-              {c}
+              {CATEGORY_LABELS[c] ?? c}
             </button>
           ))}
         </div>

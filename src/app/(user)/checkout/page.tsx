@@ -31,7 +31,7 @@ export default function CheckoutPage() {
         const catalogItems = (data ?? []) as { id: string; name: string; base_price: number }[];
         setCart(entries.map((x) => {
           const item = catalogItems.find((i) => i.id === x.id);
-          return item ? { ...item, quantity: x.qty } : null;
+          return item ? { ...item, quantity: x.qty, isPo: Boolean(x.isPo) } : null;
         }).filter(Boolean) as CartItem[]);
       } finally {
         setLoading(false);
@@ -46,7 +46,21 @@ export default function CheckoutPage() {
     setSubmitting(true);
     setError(null);
 
+    const regularItems = cart.filter((c) => !c.isPo);
     const poIds = cart.filter((c) => c.isPo).map((c) => c.id);
+
+    if (regularItems.length > 0) {
+      const catalogIds = regularItems.map((c) => c.id);
+      const { data: stockRows } = await supabase.rpc('get_available_stock', { p_catalog_ids: catalogIds });
+      const availMap = new Map<string, number>();
+      ((stockRows ?? []) as { catalog_id: string; available: number }[]).forEach((r) => availMap.set(r.catalog_id, Number(r.available)));
+      const insufficient = regularItems.find((c) => (availMap.get(c.id) ?? 0) < c.quantity);
+      if (insufficient) {
+        setError(`Stok tidak cukup untuk ${insufficient.name}. Tersedia: ${availMap.get(insufficient.id) ?? 0}`);
+        setSubmitting(false);
+        return;
+      }
+    }
     if (poIds.length > 0) {
       const { data: weekStart } = await supabase.rpc('get_current_po_week');
       if (weekStart) {
@@ -102,7 +116,7 @@ export default function CheckoutPage() {
       price_each: c.base_price,
       subtotal: c.base_price * c.quantity,
       status: 'pending',
-      is_po: false,
+      is_po: c.isPo,
     }));
     const { error: itemsErr } = await supabase.from('order_items').insert(items);
     if (itemsErr) {

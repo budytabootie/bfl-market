@@ -1,5 +1,6 @@
 // src/components/layout/Topbar.tsx
 import { LogoutButton } from '@/components/auth/LogoutButton';
+import { CartLink } from '@/components/layout/CartLink';
 
 type TopbarProps = { permissions?: string[]; user?: { email?: string; name?: string } | null; variant?: 'user' | 'admin' };
 
@@ -23,6 +24,7 @@ export async function Topbar({ permissions: permProp = [], user, variant }: Topb
         </div>
       </div>
       <div className="flex items-center gap-3">
+        {isUserContext && <CartLink />}
         <span className="hidden sm:inline-flex text-xs text-slate-400">
           Signed in as <span className="ml-1 font-semibold text-slate-200">{displayName}</span>
         </span>

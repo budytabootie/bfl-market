@@ -23,6 +23,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   vest: 'Vest',
   attachment: 'Attachment',
   weapon: 'Weapon',
+  barham: 'Barham',
 };
 
 export default function AdminPoProductsPage() {
@@ -113,7 +114,7 @@ export default function AdminPoProductsPage() {
           filters={[
             {
               label: 'Kategori:',
-              options: [{ value: '', label: 'Semua' }, ...['ammo', 'vest', 'attachment', 'weapon'].map((c) => ({ value: c, label: CATEGORY_LABELS[c] ?? c }))],
+              options: [{ value: '', label: 'Semua' }, ...['ammo', 'vest', 'attachment', 'weapon', 'barham'].map((c) => ({ value: c, label: CATEGORY_LABELS[c] ?? c }))],
               value: filterCategory,
               onChange: (v) => { setFilterCategory(v); setPage(1); },
             },
