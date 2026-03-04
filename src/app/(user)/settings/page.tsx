@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { usernameToBflEmail } from '@/lib/username-email';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -71,7 +72,7 @@ export default function SettingsPage() {
     setUsernameError(null);
     setUsernameSuccess(false);
     setUsernameLoading(true);
-    const email = `${newUsername}@bfl.local`;
+    const email = usernameToBflEmail(newUsername);
     const { error: authErr } = await supabase.auth.updateUser({ email });
     if (authErr) {
       setUsernameLoading(false);

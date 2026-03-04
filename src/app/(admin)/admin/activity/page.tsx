@@ -40,6 +40,9 @@ const ACTION_LABELS: Record<string, string> = {
   'users.update': 'Update User',
   'users.delete': 'Hapus User',
   'users.reset_password': 'Reset Password',
+  'treasury.create': 'Tambah Treasury',
+  'treasury.update': 'Update Treasury',
+  'treasury.delete': 'Hapus Treasury',
 };
 
 const ENTITY_LABELS: Record<string, string> = {
@@ -53,6 +56,7 @@ const ENTITY_LABELS: Record<string, string> = {
   app_settings: 'Pengaturan',
   order_items: 'Order Item',
   users: 'User',
+  treasury: 'Treasury',
 };
 
 function formatAction(action: string): string {

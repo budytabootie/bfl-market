@@ -26,7 +26,7 @@ export function ChoosePanelClient({ initialCanAdmin }: Props) {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-bfl-bg">
+      <div className="flex min-h-dvh items-center justify-center bg-bfl-bg">
         <p className="text-slate-400">Loading…</p>
       </div>
     );
@@ -38,8 +38,8 @@ export function ChoosePanelClient({ initialCanAdmin }: Props) {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-bfl-bg p-4">
-      <Card title="Pilih Panel" className="w-full max-w-md">
+    <div className="flex min-h-dvh items-center justify-center bg-bfl-bg p-4 safe-area-inset">
+      <Card title="Pilih Panel" className="w-full max-w-md mx-auto">
         <p className="mb-4 text-sm text-slate-400">Anda memiliki akses Admin. Pilih panel:</p>
         <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
           <Button className="w-full sm:w-auto" onClick={() => { window.location.href = '/admin'; }}>

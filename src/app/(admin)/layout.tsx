@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { SidebarAdmin } from '@/components/layout/SidebarAdmin';
+import { SidebarProvider } from '@/components/layout/SidebarContext';
 import { Topbar } from '@/components/layout/Topbar';
 
 export default async function AdminLayout({
@@ -27,12 +28,14 @@ export default async function AdminLayout({
   }
 
   return (
-    <div className="flex min-h-screen">
-      <SidebarAdmin permissions={permissions} />
-      <div className="flex flex-1 flex-col">
-        <Topbar permissions={permissions} user={user} variant="admin" />
-        <main className="flex-1 p-4 md:p-6">{children}</main>
+    <SidebarProvider>
+      <div className="flex min-h-dvh">
+        <SidebarAdmin permissions={permissions} />
+        <div className="flex flex-1 flex-col min-w-0">
+          <Topbar permissions={permissions} user={user} variant="admin" />
+          <main className="flex-1 p-3 sm:p-4 md:p-6 overflow-x-hidden">{children}</main>
+        </div>
       </div>
-    </div>
+    </SidebarProvider>
   );
 }

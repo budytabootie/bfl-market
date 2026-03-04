@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { logActivity } from '@/lib/activity';
+import { usernameToBflEmail } from '@/lib/username-email';
 
 export const runtime = 'nodejs';
 
@@ -42,7 +43,7 @@ export async function POST(request: Request) {
     serviceKey,
   );
 
-  const email = `${String(username).trim().toLowerCase()}@bfl.local`;
+  const email = usernameToBflEmail(username);
   const { data: authData, error: authErr } = await supabase.auth.admin.createUser({
     email,
     password,
@@ -137,7 +138,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'id, name, username, role_id required' }, { status: 400 });
   }
 
-  const email = `${String(username).trim().toLowerCase()}@bfl.local`;
+  const email = usernameToBflEmail(username);
   const { error: authErr } = await supabase.auth.admin.updateUserById(id, { email });
   if (authErr) return NextResponse.json({ error: authErr.message }, { status: 400 });
 

@@ -31,7 +31,7 @@ export function CartLink() {
   return (
     <Link
       href="/cart"
-      className="relative flex items-center gap-2 rounded-xl border border-slate-700/80 bg-slate-800/40 px-4 py-2 text-sm font-medium text-slate-200 transition-colors hover:border-bfl-primary/40 hover:bg-bfl-primary/10 hover:text-bfl-primary"
+      className="relative flex items-center gap-2 rounded-xl border border-slate-700/80 bg-slate-800/40 px-4 py-2 min-h-[44px] text-sm font-medium text-slate-200 transition-colors hover:border-bfl-primary/40 hover:bg-bfl-primary/10 hover:text-bfl-primary touch-target"
       aria-label={count > 0 ? `Cart: ${count} items` : 'Cart'}
     >
       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5} aria-hidden suppressHydrationWarning>

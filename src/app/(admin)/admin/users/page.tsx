@@ -334,8 +334,8 @@ export default function AdminUsersPage() {
           pageSize={PAGE_SIZE}
           onPageChange={setPage}
         />
-        <div className="overflow-x-auto text-xs">
-          <table className="w-full">
+        <div className="table-scroll text-xs">
+          <table className="w-full min-w-[600px]">
             <thead>
               <tr className="text-slate-400">
                 <th className="p-2 text-left">Name</th>

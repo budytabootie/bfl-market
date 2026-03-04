@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { SidebarUser } from '@/components/layout/SidebarUser';
+import { SidebarProvider } from '@/components/layout/SidebarContext';
 import { Topbar } from '@/components/layout/Topbar';
 
 export default async function UserLayout({
@@ -22,12 +23,14 @@ export default async function UserLayout({
   }
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      <SidebarUser permissions={permissions} />
-      <div className="flex flex-1 flex-col min-h-0">
-        <Topbar permissions={permissions} user={user} variant="user" />
-        <main className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6">{children}</main>
+    <SidebarProvider>
+      <div className="flex h-dvh overflow-hidden">
+        <SidebarUser permissions={permissions} />
+        <div className="flex flex-1 flex-col min-h-0 min-w-0">
+          <Topbar permissions={permissions} user={user} variant="user" />
+          <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-3 sm:p-4 md:p-6">{children}</main>
+        </div>
       </div>
-    </div>
+    </SidebarProvider>
   );
 }

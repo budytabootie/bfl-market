@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { usernameToBflEmail } from '@/lib/username-email';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 
@@ -22,7 +23,7 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
     setSuccess(false);
-    const email = `${username.trim().toLowerCase()}@bfl.local`;
+    const email = usernameToBflEmail(username);
     const { data: signInData, error: err } = await supabase.auth.signInWithPassword({ email, password });
     if (err) {
       setError(err.message);
@@ -47,8 +48,8 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-bfl-bg p-4">
-      <Card title="Login" className="w-full max-w-sm">
+    <div className="flex min-h-dvh items-center justify-center bg-bfl-bg p-4 safe-area-inset">
+      <Card title="Login" className="w-full max-w-sm mx-auto">
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
             <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200">{error}</div>

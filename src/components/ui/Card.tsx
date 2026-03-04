@@ -12,7 +12,7 @@ export function Card({ title, children, className }: CardProps) {
   return (
     <div
       className={clsx(
-        'rounded-2xl border border-slate-800/80 bg-slate-900/40 p-6 shadow-xl shadow-black/20 backdrop-blur-sm',
+        'rounded-2xl border border-slate-800/80 bg-slate-900/40 p-4 sm:p-6 shadow-xl shadow-black/20 backdrop-blur-sm',
         'ring-1 ring-slate-700/30',
         className,
       )}
