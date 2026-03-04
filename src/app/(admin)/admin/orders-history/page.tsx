@@ -34,6 +34,7 @@ export default function AdminOrdersHistoryPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [items, setItems] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [pageRegular, setPageRegular] = useState(1);
@@ -75,29 +76,40 @@ export default function AdminOrdersHistoryPage() {
 
   useEffect(() => {
     void (async () => {
+      setError(null);
       try {
-        const { data: ord } = await supabase
+        const { data: ord, error: ordErr } = await supabase
           .from('orders')
           .select(`
             id, created_at, status, completed_at, approved_by, user_id,
-            users(username, name),
+            users!user_id(username, name),
             approver:users!approved_by(username, name)
           `)
           .order('created_at', { ascending: false });
+        if (ordErr) {
+          setError(`Gagal load orders: ${ordErr.message}`);
+          setOrders([]);
+          setItems([]);
+          setLoading(false);
+          return;
+        }
         setOrders((ord ?? []) as unknown as Order[]);
 
         const orderIds = (ord ?? []).map((o) => o.id);
         if (orderIds.length > 0) {
-          const { data: it } = await supabase
+          const { data: it, error: itErr } = await supabase
             .from('order_items')
             .select('id, order_id, catalog_id, quantity, price_each, subtotal, status, is_po, catalog(name)')
             .in('order_id', orderIds);
+          if (itErr) setError((prev) => (prev ? `${prev}; ` : '') + `Order items: ${itErr.message}`);
           setItems((it ?? []) as unknown as OrderItem[]);
         } else {
           setItems([]);
         }
       } catch (e) {
-        console.error(e);
+        setError(e instanceof Error ? e.message : 'Unknown error');
+        setOrders([]);
+        setItems([]);
       } finally {
         setLoading(false);
       }
@@ -109,7 +121,7 @@ export default function AdminOrdersHistoryPage() {
 
   const totalApprovedByOrder = (orderId: string) =>
     items
-      .filter((i) => i.order_id === orderId && i.status === 'approved')
+      .filter((i) => i.order_id === orderId && (i.status === 'approved' || i.status === 'processed'))
       .reduce((s, i) => s + i.subtotal, 0);
 
   if (loading)
@@ -180,6 +192,12 @@ export default function AdminOrdersHistoryPage() {
 
   return (
     <div className="space-y-8">
+      {error && (
+        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+          {error}
+          <p className="mt-1 text-xs text-amber-300/80">Pastikan login sebagai Super Admin atau Treasurer. Cek RLS di Supabase.</p>
+        </div>
+      )}
       <div className="rounded-2xl border border-slate-800/80 bg-slate-900/40 p-5">
         <h1 className="text-xl font-semibold text-slate-50">Orders History</h1>
         <p className="mt-1 text-sm text-slate-400">

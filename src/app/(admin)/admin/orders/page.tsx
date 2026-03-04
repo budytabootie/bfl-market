@@ -30,6 +30,7 @@ export default function AdminOrdersPage() {
   const [pending, setPending] = useState<Order[]>([]);
   const [items, setItems] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [pageRegular, setPageRegular] = useState(1);
   const [pagePo, setPagePo] = useState(1);
@@ -60,19 +61,29 @@ export default function AdminOrdersPage() {
   }, [poOrders, pagePo]);
 
   async function load() {
-    const { data: ord } = await supabase
+    setError(null);
+    const { data: ord, error: ordErr } = await supabase
       .from('orders')
-      .select('id, created_at, status, user_id, users(username)')
+      .select('id, created_at, status, user_id, users!user_id(username)')
       .eq('status', 'pending')
       .order('created_at');
+    if (ordErr) {
+      setError(`Gagal load orders: ${ordErr.message}`);
+      setPending([]);
+      setItems([]);
+      return;
+    }
     setPending((ord ?? []) as unknown as Order[]);
 
     const orderIds = (ord ?? []).map((o) => o.id);
     if (orderIds.length > 0) {
-      const { data: it } = await supabase
+      const { data: it, error: itErr } = await supabase
         .from('order_items')
         .select('id, order_id, catalog_id, quantity, status, is_po, catalog(name)')
         .in('order_id', orderIds);
+      if (itErr) {
+        setError(`Gagal load order items: ${itErr.message}`);
+      }
       setItems((it ?? []) as unknown as OrderItem[]);
     } else {
       setItems([]);
@@ -169,6 +180,12 @@ export default function AdminOrdersPage() {
 
   return (
     <div className="space-y-8">
+      {error && (
+        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+          {error}
+          <p className="mt-1 text-xs text-amber-300/80">Pastikan Anda login sebagai Super Admin atau Treasurer. Cek juga RLS policy di Supabase.</p>
+        </div>
+      )}
       <Card title="Order Reguler" className="border-slate-700/80">
         <TableToolbar
           searchPlaceholder="Cari username…"

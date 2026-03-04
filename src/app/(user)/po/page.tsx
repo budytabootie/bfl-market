@@ -9,9 +9,6 @@ import { Button } from '@/components/ui/Button';
 
 type CatalogItem = { id: string; name: string; category: string; base_price: number; image_url?: string | null };
 
-type WeaponAddon = { id: string; name: string; base_price: number };
-type WeaponAddons = { attachments: WeaponAddon[]; ammo: WeaponAddon[] };
-
 const CATEGORIES = ['ammo', 'vest', 'attachment', 'weapon', 'barham'] as const;
 const CATEGORY_LABELS: Record<string, string> = {
   ammo: 'Ammo',
@@ -26,8 +23,7 @@ export default function PoMarketplacePage() {
   const router = useRouter();
   const supabase = createClient();
   const [items, setItems] = useState<CatalogItem[]>([]);
-  const [relations, setRelations] = useState<Record<string, WeaponAddons>>({});
-  const [selectedAddons, setSelectedAddons] = useState<Record<string, Set<string>>>({});
+  const [weaponsForAddon, setWeaponsForAddon] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>('');
   const [weekLabel, setWeekLabel] = useState<string>('');
@@ -49,26 +45,6 @@ export default function PoMarketplacePage() {
     router.push('/cart');
     router.refresh();
   }, [router]);
-
-  const toggleAddon = useCallback((weaponId: string, addonId: string) => {
-    setSelectedAddons((prev) => {
-      const next = { ...prev };
-      const set = new Set(next[weaponId] ?? []);
-      if (set.has(addonId)) set.delete(addonId);
-      else set.add(addonId);
-      next[weaponId] = set;
-      return next;
-    });
-  }, []);
-
-  const addWeaponToCart = useCallback((weaponId: string, addonIds: string[] = []) => {
-    addToCart([weaponId, ...addonIds]);
-    setSelectedAddons((prev) => {
-      const next = { ...prev };
-      delete next[weaponId];
-      return next;
-    });
-  }, [addToCart]);
 
   useEffect(() => {
     void (async () => {
@@ -117,36 +93,32 @@ export default function PoMarketplacePage() {
         const list = (data ?? []) as CatalogItem[];
         setItems(list);
 
-        const weapons = list.filter((i) => i.category === 'weapon');
-        const weaponIds = weapons.map((w) => w.id);
-        const relMap: Record<string, WeaponAddons> = {};
-        weaponIds.forEach((id) => { relMap[id] = { attachments: [], ammo: [] }; });
-
-        if (weaponIds.length > 0) {
+        const addonItems = list.filter((i) => i.category === 'attachment' || i.category === 'ammo');
+        const addonIds = addonItems.map((a) => a.id);
+        const map: Record<string, string[]> = {};
+        if (addonIds.length > 0) {
           const { data: rels } = await supabase
             .from('weapon_relations')
-            .select('weapon_catalog_id, related_catalog_id, relation_type')
-            .in('weapon_catalog_id', weaponIds);
-          const relList = (rels ?? []) as { weapon_catalog_id: string; related_catalog_id: string; relation_type: string }[];
-          const relatedIds = [...new Set(relList.map((r) => r.related_catalog_id))];
-          if (relatedIds.length > 0) {
-            const { data: cats } = await supabase
+            .select('weapon_catalog_id, related_catalog_id')
+            .in('related_catalog_id', addonIds);
+          const relList = (rels ?? []) as { weapon_catalog_id: string; related_catalog_id: string }[];
+          const weaponIds = [...new Set(relList.map((r) => r.weapon_catalog_id))];
+          if (weaponIds.length > 0) {
+            const { data: weapons } = await supabase
               .from('catalog')
-              .select('id, name, base_price')
-              .in('id', relatedIds)
-              .eq('status', 'active');
-            const catMap = new Map(((cats ?? []) as WeaponAddon[]).map((c) => [c.id, c]));
+              .select('id, name')
+              .in('id', weaponIds);
+            const nameById = new Map(((weapons ?? []) as { id: string; name: string }[]).map((w) => [w.id, w.name]));
             relList.forEach((r) => {
-              const cat = catMap.get(r.related_catalog_id);
-              if (!cat) return;
-              const key = r.relation_type === 'ammo' ? 'ammo' : 'attachments';
-              const arr = relMap[r.weapon_catalog_id]?.[key] ?? [];
-              if (!arr.some((a) => a.id === cat.id)) {
-                relMap[r.weapon_catalog_id][key] = [...arr, cat];
-              }
+              const name = nameById.get(r.weapon_catalog_id);
+              if (!name) return;
+              if (!map[r.related_catalog_id]) map[r.related_catalog_id] = [];
+              if (!map[r.related_catalog_id].includes(name)) map[r.related_catalog_id].push(name);
             });
           }
-          setRelations(relMap);
+          setWeaponsForAddon(map);
+        } else {
+          setWeaponsForAddon({});
         }
       } finally {
         setLoading(false);
@@ -220,25 +192,18 @@ export default function PoMarketplacePage() {
                   <div className="mt-2 text-emerald-400">
                     {Number(item.base_price).toLocaleString('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 })}
                   </div>
-                  {item.category === 'weapon' && ((relations[item.id]?.attachments?.length ?? 0) + (relations[item.id]?.ammo?.length ?? 0) > 0) && (
-                    <div className="mt-2 rounded-lg border border-slate-700/80 bg-slate-800/40 px-2 py-2">
-                      <div className="text-[10px] font-medium uppercase text-slate-500 mb-1.5">Add-ons (opsional)</div>
-                      {relations[item.id]?.attachments?.map((a) => (
-                        <label key={a.id} className="flex items-center gap-2 text-xs cursor-pointer">
-                          <input type="checkbox" checked={selectedAddons[item.id]?.has(a.id) ?? false} onChange={() => toggleAddon(item.id, a.id)} className="checkbox-input" />
-                          <span className="truncate">{a.name}</span>
-                        </label>
-                      ))}
-                      {relations[item.id]?.ammo?.map((a) => (
-                        <label key={a.id} className="flex items-center gap-2 text-xs cursor-pointer">
-                          <input type="checkbox" checked={selectedAddons[item.id]?.has(a.id) ?? false} onChange={() => toggleAddon(item.id, a.id)} className="checkbox-input" />
-                          <span className="truncate">{a.name}</span>
-                        </label>
-                      ))}
+                  {(item.category === 'attachment' || item.category === 'ammo') && (weaponsForAddon[item.id]?.length ?? 0) > 0 && (
+                    <div className="mt-2 rounded-lg border border-slate-700/80 bg-slate-800/40 px-2 py-1.5">
+                      <div className="text-[10px] font-medium uppercase text-slate-500 mb-0.5">Untuk senjata</div>
+                      <ul className="text-xs text-slate-300 space-y-0.5 list-none pl-0">
+                        {weaponsForAddon[item.id].map((name) => (
+                          <li key={name}>{name}</li>
+                        ))}
+                      </ul>
                     </div>
                   )}
                 </div>
-                <Button className="mt-4 w-full" onClick={() => item.category === 'weapon' ? addWeaponToCart(item.id, Array.from(selectedAddons[item.id] ?? [])) : addToCart([item.id])}>
+                <Button className="mt-4 w-full" onClick={() => addToCart([item.id])}>
                   Add to Cart
                 </Button>
               </Card>

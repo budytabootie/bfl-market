@@ -51,7 +51,7 @@ export default function MyOrdersPage() {
 
   const totalByOrder = (orderId: string) => {
     return items
-      .filter((i) => i.order_id === orderId && i.status === 'approved')
+      .filter((i) => i.order_id === orderId && (i.status === 'approved' || i.status === 'processed'))
       .reduce((s, i) => s + i.subtotal, 0);
   };
 

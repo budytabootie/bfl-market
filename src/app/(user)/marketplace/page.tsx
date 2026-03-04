@@ -29,6 +29,7 @@ export default function MarketplacePage() {
   const supabase = createClient();
   const [items, setItems] = useState<CatalogItem[]>([]);
   const [relations, setRelations] = useState<Record<string, WeaponAddons>>({});
+  const [weaponsForAddon, setWeaponsForAddon] = useState<Record<string, string[]>>({});
   const [selectedAddons, setSelectedAddons] = useState<Record<string, Set<string>>>({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -107,13 +108,14 @@ export default function MarketplacePage() {
   }, []);
 
   const addWeaponToCart = useCallback((weaponId: string, addonIds: string[] = []) => {
-    addToCart([weaponId, ...addonIds], false);
+    const addonsInStock = addonIds.filter((id) => (stockMap[id] ?? 0) > 0);
+    addToCart([weaponId, ...addonsInStock], false);
     setSelectedAddons((prev) => {
       const next = { ...prev };
       delete next[weaponId];
       return next;
     });
-  }, [addToCart]);
+  }, [addToCart, stockMap]);
 
   useEffect(() => {
     void (async () => {
@@ -158,7 +160,32 @@ export default function MarketplacePage() {
           }
           setRelations(relMap);
         }
-        const allIds = ((data ?? []) as CatalogItem[]).map((i) => i.id);
+        const list = (data ?? []) as CatalogItem[];
+        const addonItems = list.filter((i) => i.category === 'attachment' || i.category === 'ammo');
+        const addonIds = addonItems.map((a) => a.id);
+        const addonMap: Record<string, string[]> = {};
+        if (addonIds.length > 0) {
+          const { data: relsAddon } = await supabase
+            .from('weapon_relations')
+            .select('weapon_catalog_id, related_catalog_id')
+            .in('related_catalog_id', addonIds);
+          const relListAddon = (relsAddon ?? []) as { weapon_catalog_id: string; related_catalog_id: string }[];
+          const weaponIdsAddon = [...new Set(relListAddon.map((r) => r.weapon_catalog_id))];
+          if (weaponIdsAddon.length > 0) {
+            const { data: weapons } = await supabase.from('catalog').select('id, name').in('id', weaponIdsAddon);
+            const nameById = new Map(((weapons ?? []) as { id: string; name: string }[]).map((w) => [w.id, w.name]));
+            relListAddon.forEach((r) => {
+              const name = nameById.get(r.weapon_catalog_id);
+              if (!name) return;
+              if (!addonMap[r.related_catalog_id]) addonMap[r.related_catalog_id] = [];
+              if (!addonMap[r.related_catalog_id].includes(name)) addonMap[r.related_catalog_id].push(name);
+            });
+          }
+          setWeaponsForAddon(addonMap);
+        } else {
+          setWeaponsForAddon({});
+        }
+        const allIds = list.map((i) => i.id);
         if (allIds.length > 0) {
           const { data: stockRows } = await supabase.rpc('get_available_stock', { p_catalog_ids: allIds });
           const map: Record<string, number> = {};
@@ -280,37 +307,76 @@ export default function MarketplacePage() {
                 <div className="mt-2 text-sm text-emerald-400 font-medium">
                   {Number(item.base_price).toLocaleString('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 })}
                 </div>
+                {(item.category === 'attachment' || item.category === 'ammo') && (weaponsForAddon[item.id]?.length ?? 0) > 0 && (
+                  <div className="mt-2 rounded-lg border border-slate-700/80 bg-slate-800/40 px-2 py-1.5">
+                    <div className="text-[10px] font-medium uppercase text-slate-500 mb-0.5">Untuk senjata</div>
+                    <ul className="text-xs text-slate-300 space-y-0.5 list-none pl-0">
+                      {weaponsForAddon[item.id].map((name) => (
+                        <li key={name}>{name}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 {item.category === 'weapon' && ((relations[item.id]?.attachments?.length ?? 0) + (relations[item.id]?.ammo?.length ?? 0) > 0) && (
-                  <div className="mt-2 rounded-lg border border-slate-700/80 bg-slate-800/40 px-2 py-2">
-                    <div className="text-[10px] font-medium uppercase text-slate-500 mb-1.5">Add-ons</div>
+                  <div className={`mt-2 rounded-lg border border-slate-700/80 bg-slate-800/40 px-2 py-2 ${(stockMap[item.id] ?? 0) <= 0 ? 'opacity-70' : ''}`}>
+                    <div className="text-[10px] font-medium uppercase text-slate-500 mb-1.5">
+                      Add-ons (jika ada stok)
+                      {(stockMap[item.id] ?? 0) <= 0 && <span className="block mt-0.5 text-amber-400/90 font-normal normal-case">Stok senjata habis — add-on tidak bisa dipilih</span>}
+                    </div>
                     {relations[item.id]?.attachments && relations[item.id].attachments.length > 0 && (
                       <div className="space-y-1">
-                        {relations[item.id].attachments.map((a) => (
-                          <label key={a.id} className="flex items-center gap-2 text-xs cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={selectedAddons[item.id]?.has(a.id) ?? false}
-                              onChange={() => toggleAddon(item.id, a.id)}
-                              className="checkbox-input"
-                            />
-                            <span className="truncate">{a.name}</span>
-                          </label>
-                        ))}
+                        {relations[item.id].attachments.map((a) => {
+                          const addonStock = stockMap[a.id] ?? 0;
+                          const addonOutOfStock = addonStock <= 0;
+                          const weaponOutOfStock = (stockMap[item.id] ?? 0) <= 0;
+                          const disabled = addonOutOfStock || weaponOutOfStock;
+                          return (
+                            <label
+                              key={a.id}
+                              className={`flex items-center gap-2 text-xs ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selectedAddons[item.id]?.has(a.id) ?? false}
+                                onChange={() => !disabled && toggleAddon(item.id, a.id)}
+                                disabled={disabled}
+                                className="checkbox-input"
+                              />
+                              <span className="truncate">{a.name}</span>
+                              <span className="text-[10px] text-slate-500 shrink-0">
+                                {addonOutOfStock ? 'Stok habis' : `Stok: ${addonStock}`}
+                              </span>
+                            </label>
+                          );
+                        })}
                       </div>
                     )}
                     {relations[item.id]?.ammo && relations[item.id].ammo.length > 0 && (
                       <div className="mt-1.5 space-y-1">
-                        {relations[item.id].ammo.map((a) => (
-                          <label key={a.id} className="flex items-center gap-2 text-xs cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={selectedAddons[item.id]?.has(a.id) ?? false}
-                              onChange={() => toggleAddon(item.id, a.id)}
-                              className="checkbox-input"
-                            />
-                            <span className="truncate">{a.name}</span>
-                          </label>
-                        ))}
+                        {relations[item.id].ammo.map((a) => {
+                          const addonStock = stockMap[a.id] ?? 0;
+                          const addonOutOfStock = addonStock <= 0;
+                          const weaponOutOfStock = (stockMap[item.id] ?? 0) <= 0;
+                          const disabled = addonOutOfStock || weaponOutOfStock;
+                          return (
+                            <label
+                              key={a.id}
+                              className={`flex items-center gap-2 text-xs ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selectedAddons[item.id]?.has(a.id) ?? false}
+                                onChange={() => !disabled && toggleAddon(item.id, a.id)}
+                                disabled={disabled}
+                                className="checkbox-input"
+                              />
+                              <span className="truncate">{a.name}</span>
+                              <span className="text-[10px] text-slate-500 shrink-0">
+                                {addonOutOfStock ? 'Stok habis' : `Stok: ${addonStock}`}
+                              </span>
+                            </label>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
