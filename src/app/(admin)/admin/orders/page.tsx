@@ -198,6 +198,13 @@ export default function AdminOrdersPage() {
     load();
   }
 
+  async function markOrderListed(orderId: string) {
+    const { error } = await supabase.from('orders').update({ status: 'listed' }).eq('id', orderId);
+    if (error) throw new Error(error.message);
+    await logActivity(supabase, 'order.po_listed', 'orders', orderId, {});
+    load();
+  }
+
   if (loading) return <Card title="Pending Orders"><p className="text-slate-400">Loading…</p></Card>;
 
   function renderOrderList(orders: Order[], page: number, setPage: (n: number) => void) {
@@ -206,6 +213,8 @@ export default function AdminOrdersPage() {
         {orders.map((o) => {
             const orderItems = items.filter((i) => i.order_id === o.id);
             const hasApproved = orderItems.some((i) => i.status === 'approved');
+            const isPoOrder = orderItems.some((i) => i.is_po);
+            const allPoItemsDecided = isPoOrder && orderItems.every((i) => i.status !== 'pending') && orderItems.some((i) => i.status === 'approved');
             const buyer = (o.users as { username?: string }) ?? {};
             return (
               <div key={o.id} className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
@@ -215,7 +224,10 @@ export default function AdminOrdersPage() {
                   <div><span className="text-slate-500">Tanggal:</span> <span className="text-slate-300">{new Date(o.created_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</span></div>
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <span className="text-slate-500">Status: <span className="text-amber-400">Pending</span></span>
-                    {hasApproved && (
+                    {allPoItemsDecided && (
+                      <Button className="text-xs" onClick={() => markOrderListed(o.id)}>Tandai Listed</Button>
+                    )}
+                    {hasApproved && !allPoItemsDecided && (
                       <Button className="text-xs" onClick={() => processOrder(o.id)}>Process Order</Button>
                     )}
                   </div>

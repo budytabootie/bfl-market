@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
 import { TableToolbar } from '@/components/ui/TableToolbar';
 import Link from 'next/link';
 
@@ -13,6 +14,8 @@ type Order = {
   completed_at: string | null;
   approved_by: string | null;
   user_id: string;
+  paid_at: string | null;
+  paid_amount: number | null;
   users: { username: string; name: string } | null;
   approver: { username: string; name: string } | null;
 };
@@ -26,7 +29,9 @@ type OrderItem = {
   subtotal: number;
   status: string;
   is_po: boolean;
-  catalog: { name: string } | null;
+  ready_for_receive_at: string | null;
+  received_at: string | null;
+  catalog: { name: string; category?: string } | null;
 };
 
 export default function AdminOrdersHistoryPage() {
@@ -40,6 +45,14 @@ export default function AdminOrdersHistoryPage() {
   const [filterApprover, setFilterApprover] = useState('');
   const [pageRegular, setPageRegular] = useState(1);
   const [pagePo, setPagePo] = useState(1);
+  const [poTab, setPoTab] = useState<'bayar' | 'diterima' | 'selesai'>('bayar');
+  const [payModalOrderId, setPayModalOrderId] = useState<string | null>(null);
+  const [payAmount, setPayAmount] = useState('');
+  const [payLoading, setPayLoading] = useState(false);
+  const [snModalItem, setSnModalItem] = useState<{ orderId: string; itemId: string; catalogId: string; itemName: string; userId: string } | null>(null);
+  const [snInput, setSnInput] = useState('');
+  const [snLoading, setSnLoading] = useState(false);
+  const [orderItemWeapons, setOrderItemWeapons] = useState<{ order_item_id: string }[]>([]);
   const PAGE_SIZE = 10;
 
   const approverOptions = useMemo(() => {
@@ -94,10 +107,41 @@ export default function AdminOrdersHistoryPage() {
     return regularOrders.slice(from, from + PAGE_SIZE);
   }, [regularOrders, pageRegular]);
 
+  const orderTotal = (orderId: string) =>
+    items.filter((i) => i.order_id === orderId).reduce((s, i) => s + Number(i.subtotal), 0);
+
+  const poOrdersMenungguBayar = useMemo(() => {
+    return poOrders.filter((o) => {
+      if (o.status !== 'listed') return false;
+      const total = orderTotal(o.id);
+      const paid = Number(o.paid_amount ?? 0);
+      return paid < total;
+    });
+  }, [poOrders, items]);
+
+  const poOrdersMenungguDiterima = useMemo(() => {
+    return poOrders.filter((o) => {
+      if (o.status !== 'listed') return false;
+      if (!o.paid_at) return false;
+      const orderItems = items.filter((i) => i.order_id === o.id && i.is_po);
+      return orderItems.some((i) => !i.received_at);
+    });
+  }, [poOrders, items]);
+
+  const poOrdersSelesai = useMemo(() => {
+    return poOrders.filter((o) => o.status === 'completed');
+  }, [poOrders]);
+
+  const poOrdersForTab = useMemo(() => {
+    if (poTab === 'bayar') return poOrdersMenungguBayar;
+    if (poTab === 'diterima') return poOrdersMenungguDiterima;
+    return poOrdersSelesai;
+  }, [poTab, poOrdersMenungguBayar, poOrdersMenungguDiterima, poOrdersSelesai]);
+
   const paginatedPo = useMemo(() => {
     const from = (pagePo - 1) * PAGE_SIZE;
-    return poOrders.slice(from, from + PAGE_SIZE);
-  }, [poOrders, pagePo]);
+    return poOrdersForTab.slice(from, from + PAGE_SIZE);
+  }, [poOrdersForTab, pagePo]);
 
   /** Group orders by transaction date (created_at, local date) for clearer separation and per-day totals */
   function groupOrdersByDate(orderList: Order[]) {
@@ -117,47 +161,106 @@ export default function AdminOrdersHistoryPage() {
       .map(([, v]) => v);
   }
 
-  useEffect(() => {
-    void (async () => {
-      setError(null);
-      try {
-        const { data: ord, error: ordErr } = await supabase
-          .from('orders')
-          .select(`
-            id, created_at, status, completed_at, approved_by, user_id,
-            users!user_id(username, name),
-            approver:users!approved_by(username, name)
-          `)
-          .order('created_at', { ascending: false });
-        if (ordErr) {
-          setError(`Gagal load orders: ${ordErr.message}`);
-          setOrders([]);
-          setItems([]);
-          setLoading(false);
-          return;
-        }
-        setOrders((ord ?? []) as unknown as Order[]);
-
-        const orderIds = (ord ?? []).map((o) => o.id);
-        if (orderIds.length > 0) {
-          const { data: it, error: itErr } = await supabase
-            .from('order_items')
-            .select('id, order_id, catalog_id, quantity, price_each, subtotal, status, is_po, catalog(name)')
-            .in('order_id', orderIds);
-          if (itErr) setError((prev) => (prev ? `${prev}; ` : '') + `Order items: ${itErr.message}`);
-          setItems((it ?? []) as unknown as OrderItem[]);
-        } else {
-          setItems([]);
-        }
-      } catch (e) {
-        setError(e instanceof Error ? e.message : 'Unknown error');
+  async function load() {
+    setError(null);
+    try {
+      const { data: ord, error: ordErr } = await supabase
+        .from('orders')
+        .select(`
+          id, created_at, status, completed_at, approved_by, user_id, paid_at, paid_amount,
+          users!user_id(username, name),
+          approver:users!approved_by(username, name)
+        `)
+        .order('created_at', { ascending: false });
+      if (ordErr) {
+        setError(`Gagal load orders: ${ordErr.message}`);
         setOrders([]);
         setItems([]);
-      } finally {
-        setLoading(false);
+        return;
       }
-    })();
+      setOrders((ord ?? []) as unknown as Order[]);
+
+      const orderIds = (ord ?? []).map((o) => o.id);
+      if (orderIds.length > 0) {
+        const { data: it, error: itErr } = await supabase
+          .from('order_items')
+          .select('id, order_id, catalog_id, quantity, price_each, subtotal, status, is_po, ready_for_receive_at, received_at, catalog(name, category)')
+          .in('order_id', orderIds);
+        if (itErr) setError((prev) => (prev ? `${prev}; ` : '') + `Order items: ${itErr.message}`);
+        const itemList = (it ?? []) as unknown as OrderItem[];
+        setItems(itemList);
+        const itemIds = itemList.map((x) => x.id);
+        const { data: oiw } = await supabase.from('order_item_weapons').select('order_item_id').in('order_item_id', itemIds);
+        setOrderItemWeapons((oiw ?? []) as { order_item_id: string }[]);
+        await runAutoReceive(itemList);
+      } else {
+        setItems([]);
+        setOrderItemWeapons([]);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unknown error');
+      setOrders([]);
+      setItems([]);
+    }
+  }
+
+  async function runAutoReceive(itemList: OrderItem[]) {
+    const now = new Date();
+    const toReceive: string[] = [];
+    for (const i of itemList) {
+      if (!i.is_po || i.received_at || !i.ready_for_receive_at) continue;
+      const ready = new Date(i.ready_for_receive_at);
+      if (now.getTime() - ready.getTime() >= 24 * 60 * 60 * 1000) toReceive.push(i.id);
+    }
+    if (toReceive.length === 0) return;
+    for (const id of toReceive) {
+      await supabase.from('order_items').update({ received_at: new Date().toISOString() }).eq('id', id);
+    }
+    if (toReceive.length > 0) await load();
+  }
+
+  useEffect(() => {
+    void (async () => {
+      setLoading(true);
+      await load();
+    })().finally(() => setLoading(false));
   }, []);
+
+  async function markOrderPaid(orderId: string, amount: number) {
+    setPayLoading(true);
+    try {
+      await supabase.from('orders').update({ paid_at: new Date().toISOString(), paid_amount: amount }).eq('id', orderId);
+      setPayModalOrderId(null);
+      setPayAmount('');
+      await load();
+    } finally {
+      setPayLoading(false);
+    }
+  }
+
+  async function markItemReadyForReceive(itemId: string) {
+    await supabase.from('order_items').update({ ready_for_receive_at: new Date().toISOString() }).eq('id', itemId);
+    await load();
+  }
+
+  async function assignSnWeaponPo(orderId: string, itemId: string, catalogId: string, sn: string, userId: string) {
+    setSnLoading(true);
+    try {
+      const { data: w } = await supabase.from('warehouse_weapons').insert({ catalog_id: catalogId, serial_number: sn, status: 'in_use', owner_id: userId }).select('id').single();
+      if (!w) throw new Error('Gagal insert weapon');
+      await supabase.from('order_item_weapons').insert({ order_item_id: itemId, warehouse_weapon_id: (w as { id: string }).id });
+      setSnModalItem(null);
+      setSnInput('');
+      await load();
+    } finally {
+      setSnLoading(false);
+    }
+  }
+
+  async function completePoOrder(orderId: string) {
+    await supabase.from('orders').update({ status: 'completed', completed_at: new Date().toISOString() }).eq('id', orderId);
+    await load();
+  }
 
   const itemsByOrder = (orderId: string) =>
     items.filter((i) => i.order_id === orderId);
@@ -169,6 +272,16 @@ export default function AdminOrdersHistoryPage() {
 
   const totalApprovedForOrders = (orderList: Order[]) =>
     orderList.reduce((sum, o) => sum + totalApprovedByOrder(o.id), 0);
+
+  const hasWeaponAssigned = (itemId: string) => orderItemWeapons.some((w) => w.order_item_id === itemId);
+
+  const canCompletePo = (o: Order) => {
+    if (!o.paid_at) return false;
+    const orderItems = items.filter((i) => i.order_id === o.id && i.is_po);
+    if (orderItems.some((i) => !i.received_at)) return false;
+    const weaponItems = orderItems.filter((i) => (i.catalog as { category?: string })?.category === 'weapon');
+    return weaponItems.every((i) => hasWeaponAssigned(i.id));
+  };
 
   if (loading)
     return (
@@ -247,6 +360,82 @@ export default function AdminOrdersHistoryPage() {
     );
   }
 
+  function renderOrderCardPo(o: Order) {
+    const orderItems = itemsByOrder(o.id).filter((i) => i.is_po);
+    const total = orderTotal(o.id);
+    const paid = Number(o.paid_amount ?? 0);
+    const unpaid = total - paid;
+    const buyer = (o.users as { username?: string; name?: string }) ?? {};
+    return (
+      <div key={o.id} className="rounded-xl border border-amber-500/20 bg-slate-900/60 p-4">
+        <div className="grid grid-cols-1 gap-1 text-sm border-b border-slate-800 pb-3">
+          <div><span className="text-slate-500">ID:</span> <span className="font-mono text-slate-300">{o.id.slice(0, 8)}…</span></div>
+          <div><span className="text-slate-500">Order oleh:</span> <span className="text-slate-200 font-medium">{buyer.username ?? buyer.name ?? '-'}</span></div>
+          <div><span className="text-slate-500">Tanggal:</span> <span className="text-slate-300">{new Date(o.created_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</span></div>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-slate-500">Status:</span>
+            <span className={`rounded px-2 py-0.5 text-xs capitalize ${o.status === 'completed' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}>{o.status}</span>
+            <span className="text-slate-400">Total: Rp {total.toLocaleString('id-ID')}</span>
+            {o.paid_at ? (
+              <span className="text-emerald-400">Paid: Rp {paid.toLocaleString('id-ID')}{unpaid > 0 ? ` (sisa Rp ${unpaid.toLocaleString('id-ID')})` : ''}</span>
+            ) : (
+              <span className="text-amber-400">Belum bayar</span>
+            )}
+          </div>
+          {o.status === 'listed' && !o.paid_at && (
+            <Button type="button" variant="primary" className="mt-1 text-xs" onClick={() => { setPayModalOrderId(o.id); setPayAmount(String(paid || total)); }}>Tandai Bayar</Button>
+          )}
+          {o.status === 'listed' && o.paid_at && unpaid > 0 && (
+            <Button type="button" variant="secondary" className="mt-1 text-xs" onClick={() => { setPayModalOrderId(o.id); setPayAmount(String(paid)); }}>Tambah Bayar</Button>
+          )}
+        </div>
+        <div className="mt-3 overflow-x-auto text-xs">
+          <table className="w-full min-w-[560px] border-collapse table-fixed">
+            <thead>
+              <tr className="text-slate-400 border-b border-slate-700">
+                <th className="p-2 text-left">Item</th>
+                <th className="p-2 text-right">Qty</th>
+                <th className="p-2 text-right">Subtotal</th>
+                <th className="p-2 text-center">Dikirim</th>
+                <th className="p-2 text-center">Diterima</th>
+                <th className="p-2 text-left">Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+              {orderItems.map((i) => {
+                const isWeapon = (i.catalog as { category?: string })?.category === 'weapon';
+                const hasSn = hasWeaponAssigned(i.id);
+                return (
+                  <tr key={i.id} className="border-b border-slate-800/80">
+                    <td className="p-2 truncate">{(i.catalog as { name?: string })?.name ?? '-'}</td>
+                    <td className="p-2 text-right">{i.quantity}</td>
+                    <td className="p-2 text-right">{Number(i.subtotal).toLocaleString('id-ID')}</td>
+                    <td className="p-2 text-center">{i.ready_for_receive_at ? new Date(i.ready_for_receive_at).toLocaleDateString('id-ID') : '-'}</td>
+                    <td className="p-2 text-center">{i.received_at ? new Date(i.received_at).toLocaleDateString('id-ID') : '-'}</td>
+                    <td className="p-2">
+                      {o.status === 'listed' && !i.ready_for_receive_at && (
+                        <Button type="button" variant="secondary" className="py-1! px-2! min-h-0! text-xs" onClick={() => markItemReadyForReceive(i.id)}>Tandai Dikirim</Button>
+                      )}
+                      {o.status === 'listed' && isWeapon && !hasSn && (
+                        <Button type="button" variant="primary" className="py-1! px-2! min-h-0! text-xs ml-1" onClick={() => setSnModalItem({ orderId: o.id, itemId: i.id, catalogId: i.catalog_id, itemName: (i.catalog as { name?: string })?.name ?? '', userId: o.user_id })}>Assign SN</Button>
+                      )}
+                      {isWeapon && hasSn && <span className="text-emerald-400 text-xs">SN ✓</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {o.status === 'listed' && canCompletePo(o) && (
+          <div className="mt-3 pt-3 border-t border-slate-800">
+            <Button type="button" variant="primary" onClick={() => completePoOrder(o.id)}>Selesaikan PO</Button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8">
       {error && (
@@ -313,54 +502,97 @@ export default function AdminOrdersHistoryPage() {
       </Card>
 
       <Card title="Order PO" className="border-amber-500/30 bg-amber-950/10">
+        <div className="flex gap-2 mb-4 border-b border-amber-500/20 pb-2">
+          {(['bayar', 'diterima', 'selesai'] as const).map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              className={`px-4 py-2 rounded-lg text-sm font-medium ${poTab === tab ? 'bg-amber-500/30 text-amber-200' : 'text-slate-400 hover:text-slate-200'}`}
+              onClick={() => { setPoTab(tab); setPagePo(1); }}
+            >
+              {tab === 'bayar' && `Menunggu Bayar (${poOrdersMenungguBayar.length})`}
+              {tab === 'diterima' && `Menunggu Diterima (${poOrdersMenungguDiterima.length})`}
+              {tab === 'selesai' && `Selesai (${poOrdersSelesai.length})`}
+            </button>
+          ))}
+        </div>
         <TableToolbar
           searchPlaceholder="Cari username pembeli…"
           searchValue={search}
-          onSearchChange={(v) => { setSearch(v); setPageRegular(1); setPagePo(1); }}
+          onSearchChange={(v) => { setSearch(v); setPagePo(1); }}
           filters={[
             {
               label: 'Status:',
               options: [
                 { value: '', label: 'Semua' },
                 { value: 'pending', label: 'Pending' },
+                { value: 'listed', label: 'Listed' },
                 { value: 'completed', label: 'Completed' },
                 { value: 'cancelled', label: 'Cancelled' },
               ],
               value: filterStatus,
-              onChange: (v) => { setFilterStatus(v); setPageRegular(1); setPagePo(1); },
+              onChange: (v) => { setFilterStatus(v); setPagePo(1); },
             },
             {
               label: 'Approver:',
               options: approverOptions,
               value: filterApprover,
-              onChange: (v) => { setFilterApprover(v); setPageRegular(1); setPagePo(1); },
+              onChange: (v) => { setFilterApprover(v); setPagePo(1); },
             },
           ]}
-          totalCount={poOrders.length}
+          totalCount={poOrdersForTab.length}
           page={pagePo}
           pageSize={PAGE_SIZE}
           onPageChange={setPagePo}
         />
-        {poOrders.length === 0 ? (
-          <div className="py-8 text-center"><p className="text-slate-400">Belum ada order PO.</p></div>
+        {poOrdersForTab.length === 0 ? (
+          <div className="py-8 text-center"><p className="text-slate-400">{poTab === 'bayar' ? 'Tidak ada order menunggu bayar.' : poTab === 'diterima' ? 'Tidak ada order menunggu diterima.' : 'Belum ada order PO selesai.'}</p></div>
         ) : (
-          <div className="space-y-8">
-            {groupOrdersByDate(paginatedPo).map(({ dateKey, dateLabel, orders: dayOrders }) => (
-              <div key={dateKey} className="rounded-xl border border-amber-500/20 bg-amber-950/5 overflow-hidden">
-                <div className="px-4 py-3 border-b border-amber-500/20 bg-amber-950/20 flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="font-semibold text-slate-200">Transaksi {dateLabel}</h3>
-                  <span className="text-sm font-medium text-amber-400">
-                    Total approved hari ini: Rp {totalApprovedForOrders(dayOrders).toLocaleString('id-ID')}
-                  </span>
-                </div>
-                <div className="p-4 space-y-4">
-                  {dayOrders.map((o) => renderOrderCard(o))}
-                </div>
-              </div>
-            ))}
+          <div className="space-y-4">
+            {paginatedPo.map((o) => renderOrderCardPo(o))}
           </div>
         )}
       </Card>
+
+      {payModalOrderId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => !payLoading && setPayModalOrderId(null)}>
+          <div className="rounded-2xl border border-slate-700 bg-slate-900 shadow-xl w-full max-w-sm p-5" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-slate-100">Tandai Bayar</h3>
+            <p className="mt-1 text-sm text-slate-400">Nominal yang sudah dibayar (Rp)</p>
+            <input
+              type="number"
+              min={0}
+              className="mt-2 w-full rounded-xl border border-slate-600 bg-slate-800 px-3 py-2 text-slate-200"
+              value={payAmount}
+              onChange={(e) => setPayAmount(e.target.value)}
+            />
+            <div className="mt-4 flex gap-2 justify-end">
+              <Button variant="secondary" onClick={() => { setPayModalOrderId(null); setPayAmount(''); }} disabled={payLoading}>Batal</Button>
+              <Button variant="primary" onClick={() => markOrderPaid(payModalOrderId, Number(payAmount) || 0)} disabled={payLoading}>{payLoading ? '…' : 'Simpan'}</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {snModalItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => !snLoading && setSnModalItem(null)}>
+          <div className="rounded-2xl border border-slate-700 bg-slate-900 shadow-xl w-full max-w-sm p-5" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-slate-100">Assign SN Weapon</h3>
+            <p className="mt-1 text-sm text-slate-400">Item: {snModalItem.itemName}. Masukkan serial number (barang dari supplier).</p>
+            <input
+              type="text"
+              className="mt-2 w-full rounded-xl border border-slate-600 bg-slate-800 px-3 py-2 text-slate-200"
+              placeholder="Serial Number"
+              value={snInput}
+              onChange={(e) => setSnInput(e.target.value)}
+            />
+            <div className="mt-4 flex gap-2 justify-end">
+              <Button variant="secondary" onClick={() => { setSnModalItem(null); setSnInput(''); }} disabled={snLoading}>Batal</Button>
+              <Button variant="primary" onClick={() => snInput.trim() && assignSnWeaponPo(snModalItem.orderId, snModalItem.itemId, snModalItem.catalogId, snInput.trim(), snModalItem.userId)} disabled={snLoading || !snInput.trim()}>{snLoading ? '…' : 'Simpan'}</Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <p className="text-center text-sm text-slate-500">
         <Link href="/admin/orders" className="text-bfl-primary hover:underline">← Ke Pending Orders</Link>

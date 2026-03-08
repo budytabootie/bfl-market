@@ -17,6 +17,8 @@ export default function AdminWarehousePage() {
   const [catalogId, setCatalogId] = useState('');
   const [quantity, setQuantity] = useState(0);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
@@ -86,7 +88,7 @@ export default function AdminWarehousePage() {
         <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">{error}</div>
       )}
       <Card title="Warehouse Barang (non-weapon)">
-        <p className="mb-4 text-xs text-slate-500">Klik quantity untuk edit, lalu tekan Enter atau klik di luar untuk simpan.</p>
+        <p className="mb-4 text-xs text-slate-500">Klik tombol Koreksi untuk mengubah jumlah qty, lalu Simpan atau Batal.</p>
         <form onSubmit={handleSubmit} className="flex flex-wrap gap-3">
           <select
             className="rounded-xl border border-slate-700 bg-slate-900/60 px-3 py-2 text-sm"
@@ -130,45 +132,96 @@ export default function AdminWarehousePage() {
           pageSize={PAGE_SIZE}
           onPageChange={setPage}
         />
-        <div className="mt-2 overflow-x-auto text-xs">
+        <div className="mt-2 overflow-x-auto text-sm">
           <table className="w-full">
             <thead>
               <tr className="text-slate-400">
                 <th className="p-2 text-left">Barang</th>
-                <th className="p-2 text-right">Qty</th>
-                <th className="p-2 w-20"></th>
+                <th className="p-2 text-right w-32">Qty</th>
+                <th className="p-2 w-40">Aksi</th>
               </tr>
             </thead>
             <tbody>
-              {paginatedItems.map((r) => (
-                <tr key={r.id} className="border-t border-slate-800">
-                  <td className="p-2">{(r.catalog as { name?: string })?.name ?? '-'}</td>
-                  <td className="p-2 text-right">
-                    <input
-                      key={`${r.id}-${r.quantity}`}
-                      type="number"
-                      min={0}
-                      defaultValue={r.quantity}
-                      disabled={updatingId === r.id}
-                      className="number-input w-20 text-right"
-                      onBlur={(e) => {
-                        const val = Number(e.target.value);
-                        if (!Number.isNaN(val) && val !== r.quantity) {
-                          updateQuantity(r.id, Math.max(0, val));
-                        }
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.currentTarget.blur();
-                        }
-                      }}
-                    />
-                  </td>
-                  <td className="p-2">
-                    {updatingId === r.id && <span className="text-xs text-slate-500">Menyimpan…</span>}
-                  </td>
-                </tr>
-              ))}
+              {paginatedItems.map((r) => {
+                const isEditing = editingId === r.id;
+                const isUpdating = updatingId === r.id;
+                return (
+                  <tr key={r.id} className="border-t border-slate-800">
+                    <td className="p-2">{(r.catalog as { name?: string })?.name ?? '-'}</td>
+                    <td className="p-2 text-right">
+                      <span className="text-2xl font-semibold tabular-nums text-slate-100">{r.quantity}</span>
+                    </td>
+                    <td className="p-2">
+                      {isEditing ? (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <input
+                            type="number"
+                            min={0}
+                            className="w-20 rounded-lg border border-slate-600 bg-slate-800 px-2 py-1 text-right text-sm tabular-nums"
+                            value={editValue}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                const val = Math.max(0, Number(editValue));
+                                if (!Number.isNaN(val)) {
+                                  updateQuantity(r.id, val);
+                                  setEditingId(null);
+                                  setEditValue('');
+                                }
+                              }
+                              if (e.key === 'Escape') {
+                                setEditingId(null);
+                                setEditValue('');
+                              }
+                            }}
+                            autoFocus
+                          />
+                          <Button
+                            type="button"
+                            variant="primary"
+                            className="py-1! px-2! min-h-0! text-xs"
+                            disabled={isUpdating}
+                            onClick={() => {
+                              const val = Math.max(0, Number(editValue));
+                              if (!Number.isNaN(val)) {
+                                updateQuantity(r.id, val);
+                                setEditingId(null);
+                                setEditValue('');
+                              }
+                            }}
+                          >
+                            {isUpdating ? '…' : 'Simpan'}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            className="py-1! px-2! min-h-0! text-xs"
+                            disabled={isUpdating}
+                            onClick={() => {
+                              setEditingId(null);
+                              setEditValue('');
+                            }}
+                          >
+                            Batal
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="py-1.5! px-3! min-h-0! text-xs"
+                          onClick={() => {
+                            setEditingId(r.id);
+                            setEditValue(String(r.quantity));
+                          }}
+                        >
+                          Koreksi
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

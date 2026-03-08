@@ -1,0 +1,19 @@
+---
+description: When user asks to commit, run full procedure (add, commit, push)
+alwaysApply: true
+---
+
+# Commit preference
+
+When the user asks to **commit** (e.g. "buat commit", "commit dong", "commit messagenya", "commit dan push"):
+
+1. **Do the commit directly** — do not only suggest a message or ask for confirmation.
+2. **Procedure:**
+   - Run `git status` to see what changed.
+   - `git add` the files to commit (e.g. `git add .` or the specific files).
+   - `git commit -m "..."` with a clear message (conventional style: `fix:`, `feat:`, etc., or descriptive).
+   - `git push origin <current-branch>` (typically `main`).
+3. **Message:** If the user didn't specify a message, infer one from the staged changes and use it in the commit.
+4. Use `git_write` for commit and `network` for push when running these commands.
+
+Exception: if the user explicitly only asks for a "commit message" (no request to actually commit), then only provide the message text.

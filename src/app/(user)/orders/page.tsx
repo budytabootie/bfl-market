@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
 import Link from 'next/link';
 
 type Order = {
@@ -19,6 +20,8 @@ type OrderItem = {
   status: string;
   subtotal: number;
   is_po: boolean;
+  ready_for_receive_at: string | null;
+  received_at: string | null;
 };
 
 export default function MyOrdersPage() {
@@ -27,27 +30,23 @@ export default function MyOrdersPage() {
   const [items, setItems] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(true);
 
+  async function load() {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data: profile } = await supabase.from('users').select('id').eq('id', user.id).single();
+    if (!profile) return;
+    const { data: ord } = await supabase.from('orders').select('id, created_at, status').eq('user_id', profile.id).order('created_at', { ascending: false });
+    setOrders((ord ?? []) as Order[]);
+    const ids = (ord ?? []).map((o) => o.id);
+    if (ids.length > 0) {
+      const { data: it } = await supabase.from('order_items').select('id, order_id, catalog(name), quantity, status, subtotal, is_po, ready_for_receive_at, received_at').in('order_id', ids);
+      setItems((it ?? []) as unknown as OrderItem[]);
+    } else setItems([]);
+  }
+
   useEffect(() => {
-    void (async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return;
-        const { data: profile } = await supabase.from('users').select('id').eq('id', user.id).single();
-        if (!profile) return;
-
-        const { data: ord } = await supabase.from('orders').select('id, created_at, status').eq('user_id', profile.id).order('created_at', { ascending: false });
-        setOrders((ord ?? []) as Order[]);
-
-        const ids = (ord ?? []).map((o) => o.id);
-        if (ids.length > 0) {
-          const { data: it } = await supabase.from('order_items').select('id, order_id, catalog(name), quantity, status, subtotal, is_po').in('order_id', ids);
-          setItems((it ?? []) as unknown as OrderItem[]);
-        }
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [supabase]);
+    void load().finally(() => setLoading(false));
+  }, []);
 
   const totalByOrder = (orderId: string) => {
     return items
@@ -79,12 +78,28 @@ export default function MyOrdersPage() {
                 </div>
                 <div className="mt-2 text-xs">
                   {items.filter((i) => i.order_id === o.id).map((i) => (
-                    <div key={i.id} className="flex justify-between items-center">
+                    <div key={i.id} className="flex justify-between items-center flex-wrap gap-1">
                       <span>
                         {(i.catalog as { name?: string })?.name ?? '-'} x{i.quantity} ({i.status})
                         {i.is_po && <span className="ml-2 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] text-amber-300">PO</span>}
+                        {i.is_po && i.received_at && <span className="ml-1 text-emerald-400">✓ Diterima</span>}
                       </span>
-                      <span>{i.subtotal.toLocaleString('id-ID')}</span>
+                      <span className="flex items-center gap-2">
+                        {i.is_po && i.ready_for_receive_at && !i.received_at && (
+                          <Button
+                            type="button"
+                            variant="primary"
+                            className="py-1! px-2! min-h-0! text-[10px]"
+                            onClick={async () => {
+                              await supabase.from('order_items').update({ received_at: new Date().toISOString() }).eq('id', i.id);
+                              await load();
+                            }}
+                          >
+                            Konfirmasi Diterima
+                          </Button>
+                        )}
+                        <span>{i.subtotal.toLocaleString('id-ID')}</span>
+                      </span>
                     </div>
                   ))}
                 </div>
