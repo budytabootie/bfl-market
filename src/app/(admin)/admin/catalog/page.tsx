@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { ImageUploadInput } from '@/components/ui/ImageUploadInput';
 import { TableToolbar } from '@/components/ui/TableToolbar';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 type CatalogRow = {
   id: string;
@@ -48,6 +49,8 @@ export default function AdminCatalogPage() {
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 10;
 
+  const [pendingDelete, setPendingDelete] = useState<CatalogRow | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const [editing, setEditing] = useState<CatalogRow | null>(null);
   const [editName, setEditName] = useState('');
   const [editCategory, setEditCategory] = useState<(typeof CATEGORIES)[number]>('ammo');
@@ -181,8 +184,7 @@ export default function AdminCatalogPage() {
     load();
   }
 
-  async function handleDelete(r: CatalogRow) {
-    if (!confirm(`Hapus "${r.name}"? Item yang pernah dipakai di order tidak bisa dihapus.`)) return;
+  async function doDelete(r: CatalogRow) {
     setError(null);
     const { count } = await supabase
       .from('order_items')
@@ -199,6 +201,16 @@ export default function AdminCatalogPage() {
     }
     await logActivity(supabase, 'catalog.delete', 'catalog', r.id, { name: r.name });
     load();
+  }
+
+  async function handleConfirmDelete() {
+    if (!pendingDelete) return;
+    setDeleteLoading(true);
+    try {
+      await doDelete(pendingDelete);
+    } finally {
+      setDeleteLoading(false);
+    }
   }
 
   async function toggleStatus(id: string, s: string) {
@@ -322,7 +334,7 @@ export default function AdminCatalogPage() {
                   </td>
                   <td className="p-2">
                     <button type="button" className="text-bfl-primary hover:underline mr-2" onClick={() => openEdit(r)}>Edit</button>
-                    <button type="button" className="text-red-400 hover:underline" onClick={() => handleDelete(r)}>Hapus</button>
+                    <button type="button" className="text-red-400 hover:underline" onClick={() => setPendingDelete(r)}>Hapus</button>
                   </td>
                 </tr>
               ))}
@@ -381,6 +393,17 @@ export default function AdminCatalogPage() {
           </div>
         </div>
       )}
+      <ConfirmDialog
+        open={!!pendingDelete}
+        onClose={() => setPendingDelete(null)}
+        title="Hapus barang?"
+        message={pendingDelete ? `Hapus "${pendingDelete.name}"? Item yang pernah dipakai di order tidak bisa dihapus.` : ''}
+        confirmLabel="Hapus"
+        cancelLabel="Batal"
+        variant="danger"
+        onConfirm={handleConfirmDelete}
+        loading={deleteLoading}
+      />
     </div>
   );
 }

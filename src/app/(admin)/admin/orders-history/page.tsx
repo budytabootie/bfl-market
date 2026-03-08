@@ -37,9 +37,23 @@ export default function AdminOrdersHistoryPage() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [filterApprover, setFilterApprover] = useState('');
   const [pageRegular, setPageRegular] = useState(1);
   const [pagePo, setPagePo] = useState(1);
   const PAGE_SIZE = 10;
+
+  const approverOptions = useMemo(() => {
+    const seen = new Set<string>();
+    const opts: { value: string; label: string }[] = [{ value: '', label: 'Semua' }];
+    orders.forEach((o) => {
+      const a = o.approver as { username?: string; name?: string } | null;
+      const key = a && (a.username || a.name) ? (a.username ?? a.name) : '__none__';
+      if (seen.has(key)) return;
+      seen.add(key);
+      opts.push({ value: key, label: key === '__none__' ? 'Belum ada approver' : key });
+    });
+    return opts;
+  }, [orders]);
 
   const filterBySearch = (r: Order[]) => {
     const q = search.trim().toLowerCase();
@@ -52,17 +66,28 @@ export default function AdminOrdersHistoryPage() {
     });
   };
 
+  const filterByApprover = (r: Order[]) => {
+    if (!filterApprover) return r;
+    if (filterApprover === '__none__') return r.filter((o) => !o.approved_by);
+    return r.filter((o) => {
+      const a = o.approver as { username?: string; name?: string } | null;
+      return a && ((a.username ?? a.name) === filterApprover);
+    });
+  };
+
   const regularOrders = useMemo(() => {
     let r = orders.filter((o) => !items.some((i) => i.order_id === o.id && i.is_po));
     if (filterStatus) r = r.filter((o) => o.status === filterStatus);
+    r = filterByApprover(r);
     return filterBySearch(r);
-  }, [orders, search, filterStatus, items]);
+  }, [orders, search, filterStatus, filterApprover, items]);
 
   const poOrders = useMemo(() => {
     let r = orders.filter((o) => items.some((i) => i.order_id === o.id && i.is_po));
     if (filterStatus) r = r.filter((o) => o.status === filterStatus);
+    r = filterByApprover(r);
     return filterBySearch(r);
-  }, [orders, search, filterStatus, items]);
+  }, [orders, search, filterStatus, filterApprover, items]);
 
   const paginatedRegular = useMemo(() => {
     const from = (pageRegular - 1) * PAGE_SIZE;
@@ -73,6 +98,24 @@ export default function AdminOrdersHistoryPage() {
     const from = (pagePo - 1) * PAGE_SIZE;
     return poOrders.slice(from, from + PAGE_SIZE);
   }, [poOrders, pagePo]);
+
+  /** Group orders by transaction date (created_at, local date) for clearer separation and per-day totals */
+  function groupOrdersByDate(orderList: Order[]) {
+    const map = new Map<string, { dateKey: string; dateLabel: string; orders: Order[] }>();
+    for (const o of orderList) {
+      const d = new Date(o.created_at);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const dateKey = `${y}-${m}-${day}`;
+      const dateLabel = d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+      if (!map.has(dateKey)) map.set(dateKey, { dateKey, dateLabel, orders: [] });
+      map.get(dateKey)!.orders.push(o);
+    }
+    return Array.from(map.entries())
+      .sort(([a], [b]) => b.localeCompare(a))
+      .map(([, v]) => v);
+  }
 
   useEffect(() => {
     void (async () => {
@@ -124,6 +167,9 @@ export default function AdminOrdersHistoryPage() {
       .filter((i) => i.order_id === orderId && (i.status === 'approved' || i.status === 'processed'))
       .reduce((s, i) => s + i.subtotal, 0);
 
+  const totalApprovedForOrders = (orderList: Order[]) =>
+    orderList.reduce((sum, o) => sum + totalApprovedByOrder(o.id), 0);
+
   if (loading)
     return (
       <Card title="Orders History">
@@ -138,18 +184,29 @@ export default function AdminOrdersHistoryPage() {
     const approverData = (o.approver as { username?: string; name?: string }) ?? null;
     return (
       <div key={o.id} className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-          <span className="font-mono text-slate-500">{o.id.slice(0, 8)}…</span>
-          <span>{new Date(o.created_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</span>
-          <span className="text-slate-300">Order oleh: <strong>{buyer.username ?? buyer.name ?? '-'}</strong></span>
-          <span className={`rounded px-2 py-0.5 text-xs capitalize ${o.status === 'completed' ? 'bg-emerald-500/20 text-emerald-400' : o.status === 'cancelled' ? 'bg-red-500/20 text-red-400' : 'bg-amber-500/20 text-amber-400'}`}>
-            {o.status}
-          </span>
+        <div className="grid grid-cols-1 gap-1 text-sm border-b border-slate-800 pb-3">
+          <div><span className="text-slate-500">ID Transaksi:</span> <span className="font-mono text-slate-300">{o.id.slice(0, 8)}…</span></div>
+          <div><span className="text-slate-500">Order oleh:</span> <span className="text-slate-200 font-medium">{buyer.username ?? buyer.name ?? '-'}</span></div>
+          <div><span className="text-slate-500">Tanggal:</span> <span className="text-slate-300">{new Date(o.created_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</span></div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-slate-500">Status:</span>
+            <span className={`rounded px-2 py-0.5 text-xs capitalize ${o.status === 'completed' ? 'bg-emerald-500/20 text-emerald-400' : o.status === 'cancelled' ? 'bg-red-500/20 text-red-400' : 'bg-amber-500/20 text-amber-400'}`}>
+              {o.status}
+            </span>
+          </div>
         </div>
         <div className="mt-3 overflow-x-auto text-xs">
-          <table className="w-full">
+          <table className="w-full min-w-[520px] border-collapse table-fixed">
+            <colgroup>
+              <col style={{ width: '24%' }} />
+              <col style={{ width: '8%' }} />
+              <col style={{ width: '12%' }} />
+              <col style={{ width: '14%' }} />
+              <col style={{ width: '14%' }} />
+              <col style={{ width: '14%' }} />
+            </colgroup>
             <thead>
-              <tr className="text-slate-400">
+              <tr className="text-slate-400 border-b border-slate-700">
                 <th className="p-2 text-left">Item</th>
                 <th className="p-2 text-right">Qty</th>
                 <th className="p-2 text-center">Tipe</th>
@@ -160,8 +217,8 @@ export default function AdminOrdersHistoryPage() {
             </thead>
             <tbody>
               {orderItems.map((i) => (
-                <tr key={i.id} className="border-t border-slate-800">
-                  <td className="p-2">{(i.catalog as { name?: string })?.name ?? '-'}</td>
+                <tr key={i.id} className="border-b border-slate-800/80">
+                  <td className="p-2 truncate" title={(i.catalog as { name?: string })?.name ?? '-'}>{(i.catalog as { name?: string })?.name ?? '-'}</td>
                   <td className="p-2 text-right">{i.quantity}</td>
                   <td className="p-2 text-center">
                     {i.is_po ? <span className="rounded px-2 py-0.5 text-[11px] bg-amber-500/20 text-amber-300">PO</span> : <span className="text-slate-500">Regular</span>}
@@ -222,6 +279,12 @@ export default function AdminOrdersHistoryPage() {
               value: filterStatus,
               onChange: (v) => { setFilterStatus(v); setPageRegular(1); setPagePo(1); },
             },
+            {
+              label: 'Approver:',
+              options: approverOptions,
+              value: filterApprover,
+              onChange: (v) => { setFilterApprover(v); setPageRegular(1); setPagePo(1); },
+            },
           ]}
           totalCount={regularOrders.length}
           page={pageRegular}
@@ -231,8 +294,20 @@ export default function AdminOrdersHistoryPage() {
         {regularOrders.length === 0 ? (
           <div className="py-8 text-center"><p className="text-slate-400">Belum ada order reguler.</p></div>
         ) : (
-          <div className="space-y-4">
-            {paginatedRegular.map((o) => renderOrderCard(o))}
+          <div className="space-y-8">
+            {groupOrdersByDate(paginatedRegular).map(({ dateKey, dateLabel, orders: dayOrders }) => (
+              <div key={dateKey} className="rounded-xl border border-slate-700/80 bg-slate-900/30 overflow-hidden">
+                <div className="px-4 py-3 border-b border-slate-700/80 bg-slate-800/50 flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="font-semibold text-slate-200">Transaksi {dateLabel}</h3>
+                  <span className="text-sm font-medium text-emerald-400">
+                    Total approved hari ini: Rp {totalApprovedForOrders(dayOrders).toLocaleString('id-ID')}
+                  </span>
+                </div>
+                <div className="p-4 space-y-4">
+                  {dayOrders.map((o) => renderOrderCard(o))}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </Card>
@@ -254,6 +329,12 @@ export default function AdminOrdersHistoryPage() {
               value: filterStatus,
               onChange: (v) => { setFilterStatus(v); setPageRegular(1); setPagePo(1); },
             },
+            {
+              label: 'Approver:',
+              options: approverOptions,
+              value: filterApprover,
+              onChange: (v) => { setFilterApprover(v); setPageRegular(1); setPagePo(1); },
+            },
           ]}
           totalCount={poOrders.length}
           page={pagePo}
@@ -263,8 +344,20 @@ export default function AdminOrdersHistoryPage() {
         {poOrders.length === 0 ? (
           <div className="py-8 text-center"><p className="text-slate-400">Belum ada order PO.</p></div>
         ) : (
-          <div className="space-y-4">
-            {paginatedPo.map((o) => renderOrderCard(o))}
+          <div className="space-y-8">
+            {groupOrdersByDate(paginatedPo).map(({ dateKey, dateLabel, orders: dayOrders }) => (
+              <div key={dateKey} className="rounded-xl border border-amber-500/20 bg-amber-950/5 overflow-hidden">
+                <div className="px-4 py-3 border-b border-amber-500/20 bg-amber-950/20 flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="font-semibold text-slate-200">Transaksi {dateLabel}</h3>
+                  <span className="text-sm font-medium text-amber-400">
+                    Total approved hari ini: Rp {totalApprovedForOrders(dayOrders).toLocaleString('id-ID')}
+                  </span>
+                </div>
+                <div className="p-4 space-y-4">
+                  {dayOrders.map((o) => renderOrderCard(o))}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </Card>
