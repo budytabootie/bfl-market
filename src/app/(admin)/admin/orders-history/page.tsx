@@ -191,7 +191,13 @@ export default function AdminOrdersHistoryPage() {
       setOrders((ord ?? []) as unknown as Order[]);
 
       const { data: treasuryRows } = await supabase.from('treasury').select('users!user_id(username, name)');
-      const treasuryList = (treasuryRows ?? []).map((r: { users: { username?: string; name?: string } | null }) => r.users).filter(Boolean) as { username: string; name: string }[];
+      const raw = (treasuryRows ?? []) as Array<{ users: { username?: string; name?: string } | { username?: string; name?: string }[] | null }>;
+      const treasuryList = raw.flatMap((r) => {
+        const u = r.users;
+        if (!u) return [];
+        const arr = Array.isArray(u) ? u : [u];
+        return arr.filter((x) => x && (x.username || x.name)).map((x) => ({ username: x!.username ?? '', name: x!.name ?? '' }));
+      });
       setTreasuryUsers(treasuryList);
 
       const orderIds = (ord ?? []).map((o) => o.id);
