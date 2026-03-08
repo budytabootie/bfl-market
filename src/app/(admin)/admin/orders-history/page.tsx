@@ -53,8 +53,10 @@ export default function AdminOrdersHistoryPage() {
   const [snInput, setSnInput] = useState('');
   const [snLoading, setSnLoading] = useState(false);
   const [orderItemWeapons, setOrderItemWeapons] = useState<{ order_item_id: string }[]>([]);
+  const [treasuryUsers, setTreasuryUsers] = useState<{ username: string; name: string }[]>([]);
   const PAGE_SIZE = 10;
 
+  /** Approver filter: gabungan dari approved_by (orders) + daftar Treasury */
   const approverOptions = useMemo(() => {
     const seen = new Set<string>();
     const opts: { value: string; label: string }[] = [{ value: '', label: 'Semua' }];
@@ -65,8 +67,15 @@ export default function AdminOrdersHistoryPage() {
       seen.add(key);
       opts.push({ value: key, label: key === '__none__' ? 'Belum ada approver' : key });
     });
-    return opts;
-  }, [orders]);
+    treasuryUsers.forEach((u) => {
+      const key = (u.username || u.name) || '';
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      opts.push({ value: key, label: u.username ?? u.name });
+    });
+    const rest = opts.slice(1).sort((a, b) => (a.label === 'Belum ada approver' ? -1 : b.label === 'Belum ada approver' ? 1 : a.label.localeCompare(b.label)));
+    return [opts[0]!, ...rest];
+  }, [orders, treasuryUsers]);
 
   const filterBySearch = (r: Order[]) => {
     const q = search.trim().toLowerCase();
@@ -164,6 +173,7 @@ export default function AdminOrdersHistoryPage() {
   async function load() {
     setError(null);
     try {
+      await supabase.rpc('auto_receive_po_items');
       const { data: ord, error: ordErr } = await supabase
         .from('orders')
         .select(`
@@ -180,6 +190,10 @@ export default function AdminOrdersHistoryPage() {
       }
       setOrders((ord ?? []) as unknown as Order[]);
 
+      const { data: treasuryRows } = await supabase.from('treasury').select('users!user_id(username, name)');
+      const treasuryList = (treasuryRows ?? []).map((r: { users: { username?: string; name?: string } | null }) => r.users).filter(Boolean) as { username: string; name: string }[];
+      setTreasuryUsers(treasuryList);
+
       const orderIds = (ord ?? []).map((o) => o.id);
       if (orderIds.length > 0) {
         const { data: it, error: itErr } = await supabase
@@ -192,7 +206,6 @@ export default function AdminOrdersHistoryPage() {
         const itemIds = itemList.map((x) => x.id);
         const { data: oiw } = await supabase.from('order_item_weapons').select('order_item_id').in('order_item_id', itemIds);
         setOrderItemWeapons((oiw ?? []) as { order_item_id: string }[]);
-        await runAutoReceive(itemList);
       } else {
         setItems([]);
         setOrderItemWeapons([]);
@@ -204,21 +217,6 @@ export default function AdminOrdersHistoryPage() {
     }
   }
 
-  async function runAutoReceive(itemList: OrderItem[]) {
-    const now = new Date();
-    const toReceive: string[] = [];
-    for (const i of itemList) {
-      if (!i.is_po || i.received_at || !i.ready_for_receive_at) continue;
-      const ready = new Date(i.ready_for_receive_at);
-      if (now.getTime() - ready.getTime() >= 24 * 60 * 60 * 1000) toReceive.push(i.id);
-    }
-    if (toReceive.length === 0) return;
-    for (const id of toReceive) {
-      await supabase.from('order_items').update({ received_at: new Date().toISOString() }).eq('id', id);
-    }
-    if (toReceive.length > 0) await load();
-  }
-
   useEffect(() => {
     void (async () => {
       setLoading(true);
@@ -228,11 +226,15 @@ export default function AdminOrdersHistoryPage() {
 
   async function markOrderPaid(orderId: string, amount: number) {
     setPayLoading(true);
+    setError(null);
     try {
-      await supabase.from('orders').update({ paid_at: new Date().toISOString(), paid_amount: amount }).eq('id', orderId);
+      const { error } = await supabase.from('orders').update({ paid_at: new Date().toISOString(), paid_amount: amount }).eq('id', orderId);
+      if (error) throw new Error(error.message);
       setPayModalOrderId(null);
       setPayAmount('');
       await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Gagal tandai bayar');
     } finally {
       setPayLoading(false);
     }
@@ -245,21 +247,32 @@ export default function AdminOrdersHistoryPage() {
 
   async function assignSnWeaponPo(orderId: string, itemId: string, catalogId: string, sn: string, userId: string) {
     setSnLoading(true);
+    setError(null);
     try {
-      const { data: w } = await supabase.from('warehouse_weapons').insert({ catalog_id: catalogId, serial_number: sn, status: 'in_use', owner_id: userId }).select('id').single();
+      const { data: w, error: insErr } = await supabase.from('warehouse_weapons').insert({ catalog_id: catalogId, serial_number: sn, status: 'in_use', owner_id: userId }).select('id').single();
+      if (insErr) throw new Error(insErr.code === '23505' ? 'Serial number sudah dipakai' : insErr.message);
       if (!w) throw new Error('Gagal insert weapon');
-      await supabase.from('order_item_weapons').insert({ order_item_id: itemId, warehouse_weapon_id: (w as { id: string }).id });
+      const { error: linkErr } = await supabase.from('order_item_weapons').insert({ order_item_id: itemId, warehouse_weapon_id: (w as { id: string }).id });
+      if (linkErr) throw new Error(linkErr.message);
       setSnModalItem(null);
       setSnInput('');
       await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Gagal assign SN');
     } finally {
       setSnLoading(false);
     }
   }
 
   async function completePoOrder(orderId: string) {
-    await supabase.from('orders').update({ status: 'completed', completed_at: new Date().toISOString() }).eq('id', orderId);
-    await load();
+    setError(null);
+    try {
+      const { error } = await supabase.rpc('complete_po_order', { p_order_id: orderId });
+      if (error) throw new Error(error.message);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Gagal selesaikan PO');
+    }
   }
 
   const itemsByOrder = (orderId: string) =>
@@ -268,7 +281,7 @@ export default function AdminOrdersHistoryPage() {
   const totalApprovedByOrder = (orderId: string) =>
     items
       .filter((i) => i.order_id === orderId && (i.status === 'approved' || i.status === 'processed'))
-      .reduce((s, i) => s + i.subtotal, 0);
+      .reduce((s, i) => s + Number(i.subtotal), 0);
 
   const totalApprovedForOrders = (orderList: Order[]) =>
     orderList.reduce((sum, o) => sum + totalApprovedByOrder(o.id), 0);
@@ -558,7 +571,7 @@ export default function AdminOrdersHistoryPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => !payLoading && setPayModalOrderId(null)}>
           <div className="rounded-2xl border border-slate-700 bg-slate-900 shadow-xl w-full max-w-sm p-5" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-slate-100">Tandai Bayar</h3>
-            <p className="mt-1 text-sm text-slate-400">Nominal yang sudah dibayar (Rp)</p>
+            <p className="mt-1 text-sm text-slate-400">Total yang sudah dibayar (Rp). Untuk tambah bayar, isi total kumulatif.</p>
             <input
               type="number"
               min={0}

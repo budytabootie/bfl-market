@@ -153,19 +153,19 @@ export default function AdminOrdersPage() {
       const rows = warehouseWeaponIds.filter(Boolean).map((wid) => ({ order_item_id: id, warehouse_weapon_id: wid }));
       const { error: insErr } = await supabase.from('order_item_weapons').insert(rows);
       if (insErr) throw new Error(insErr.message);
-      await supabase.from('order_items').update({ status: 'approved' }).eq('id', id);
-    } else {
-      await supabase.from('order_items').update({ status: 'approved' }).eq('id', id);
     }
+    const { error: upErr } = await supabase.from('order_items').update({ status: 'approved' }).eq('id', id);
+    if (upErr) throw new Error(upErr.message);
     await logActivity(supabase, 'order_item.approve', 'order_items', id, { order_id: item?.order_id, item_name: (item?.catalog as { name?: string })?.name, is_po: item?.is_po, warehouse_weapon_ids: warehouseWeaponIds });
-    load();
+    await load();
   }
 
   async function rejectItem(id: string) {
     const item = items.find((i) => i.id === id);
-    await supabase.from('order_items').update({ status: 'rejected' }).eq('id', id);
+    const { error } = await supabase.from('order_items').update({ status: 'rejected' }).eq('id', id);
+    if (error) throw new Error(error.message);
     await logActivity(supabase, 'order_item.reject', 'order_items', id, { order_id: item?.order_id, item_name: (item?.catalog as { name?: string })?.name, is_po: item?.is_po });
-    load();
+    await load();
   }
 
   async function handleConfirmAction() {
@@ -174,6 +174,9 @@ export default function AdminOrdersPage() {
     try {
       if (confirmAction.type === 'approve') await approveItem(confirmAction.id);
       else await rejectItem(confirmAction.id);
+      setConfirmAction(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Gagal approve/reject');
     } finally {
       setConfirmLoading(false);
     }
@@ -188,21 +191,36 @@ export default function AdminOrdersPage() {
     try {
       await approveItem(pendingWeaponApprove.itemId, ids);
       setPendingWeaponApprove(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Gagal approve weapon');
     } finally {
       setWeaponApproveLoading(false);
     }
   }
 
   async function processOrder(orderId: string) {
-    await supabase.rpc('process_order', { p_order_id: orderId });
-    load();
+    try {
+      const { error } = await supabase.rpc('process_order', { p_order_id: orderId });
+      if (error) throw new Error(error.message);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Gagal process order');
+    }
   }
 
   async function markOrderListed(orderId: string) {
-    const { error } = await supabase.from('orders').update({ status: 'listed' }).eq('id', orderId);
-    if (error) throw new Error(error.message);
-    await logActivity(supabase, 'order.po_listed', 'orders', orderId, {});
-    load();
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { error } = await supabase
+        .from('orders')
+        .update({ status: 'listed', approved_by: user?.id ?? null })
+        .eq('id', orderId);
+      if (error) throw new Error(error.message);
+      await logActivity(supabase, 'order.po_listed', 'orders', orderId, {});
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Gagal tandai listed');
+    }
   }
 
   if (loading) return <Card title="Pending Orders"><p className="text-slate-400">Loading…</p></Card>;
@@ -277,7 +295,8 @@ export default function AdminOrdersPage() {
                                   className="py-1.5! px-3! min-h-0! text-xs"
                                   onClick={() => {
                                     const cat = i.catalog as { name?: string; category?: string } | null;
-                                    if (cat?.category === 'weapon') {
+                                    // PO: approve hanya ack + masuk list; SN weapon diinput nanti di Order History PO saat barang ready.
+                                    if (cat?.category === 'weapon' && !i.is_po) {
                                       setPendingWeaponApprove({ itemId: i.id, name: cat?.name ?? 'Weapon', catalog_id: i.catalog_id, quantity: i.quantity });
                                     } else {
                                       setConfirmAction({ type: 'approve', id: i.id, name: cat?.name ?? 'item ini' });
