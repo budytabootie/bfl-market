@@ -111,25 +111,27 @@ export default function AdminOrdersPage() {
       return;
     }
     setWeaponPickerLoading(true);
-    supabase
-      .from('warehouse_weapons')
-      .select('id, serial_number')
-      .eq('catalog_id', pendingWeaponApprove.catalog_id)
-      .eq('status', 'available')
-      .order('serial_number')
-      .then(({ data, error }) => {
+    void (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('warehouse_weapons')
+          .select('id, serial_number')
+          .eq('catalog_id', pendingWeaponApprove.catalog_id)
+          .eq('status', 'available')
+          .order('serial_number');
         if (error) {
           setAvailableWeapons([]);
           setSelectedWeaponIds([]);
         } else {
           const list = (data ?? []) as WarehouseWeaponOption[];
           setAvailableWeapons(list);
-          const n = Math.min(pendingWeaponApprove.quantity, list.length);
           const initial = Array.from({ length: pendingWeaponApprove.quantity }, (_, i) => list[i]?.id ?? '');
           setSelectedWeaponIds(initial);
         }
-      })
-      .finally(() => setWeaponPickerLoading(false));
+      } finally {
+        setWeaponPickerLoading(false);
+      }
+    })();
   }, [pendingWeaponApprove]);
 
   useEffect(() => {
