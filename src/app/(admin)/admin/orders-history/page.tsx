@@ -47,7 +47,7 @@ export default function AdminOrdersHistoryPage() {
     const opts: { value: string; label: string }[] = [{ value: '', label: 'Semua' }];
     orders.forEach((o) => {
       const a = o.approver as { username?: string; name?: string } | null;
-      const key = a && (a.username || a.name) ? (a.username ?? a.name) : '__none__';
+      const key: string = a && (a.username || a.name) ? (a.username ?? a.name) ?? '__none__' : '__none__';
       if (seen.has(key)) return;
       seen.add(key);
       opts.push({ value: key, label: key === '__none__' ? 'Belum ada approver' : key });
