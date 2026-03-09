@@ -119,12 +119,16 @@ export default function AdminOrdersHistoryPage() {
   const orderTotal = (orderId: string) =>
     items.filter((i) => i.order_id === orderId).reduce((s, i) => s + Number(i.subtotal), 0);
 
+  /** Total hanya item PO (untuk tab Order PO: bayar/sisa hanya hitung bagian PO) */
+  const orderTotalPo = (orderId: string) =>
+    items.filter((i) => i.order_id === orderId && i.is_po).reduce((s, i) => s + Number(i.subtotal), 0);
+
   const poOrdersMenungguBayar = useMemo(() => {
     return poOrders.filter((o) => {
       if (o.status !== 'listed') return false;
-      const total = orderTotal(o.id);
+      const totalPo = orderTotalPo(o.id);
       const paid = Number(o.paid_amount ?? 0);
-      return paid < total;
+      return paid < totalPo;
     });
   }, [poOrders, items]);
 
@@ -381,9 +385,9 @@ export default function AdminOrdersHistoryPage() {
 
   function renderOrderCardPo(o: Order) {
     const orderItems = itemsByOrder(o.id).filter((i) => i.is_po);
-    const total = orderTotal(o.id);
+    const totalPo = orderTotalPo(o.id);
     const paid = Number(o.paid_amount ?? 0);
-    const unpaid = total - paid;
+    const unpaid = totalPo - paid;
     const buyer = (o.users as { username?: string; name?: string }) ?? {};
     return (
       <div key={o.id} className="rounded-xl border border-amber-500/20 bg-slate-900/60 p-4">
@@ -394,7 +398,7 @@ export default function AdminOrdersHistoryPage() {
           <div className="flex flex-wrap items-center gap-3">
             <span className="text-slate-500">Status:</span>
             <span className={`rounded px-2 py-0.5 text-xs capitalize ${o.status === 'completed' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}>{o.status}</span>
-            <span className="text-slate-400">Total: Rp {total.toLocaleString('id-ID')}</span>
+            <span className="text-slate-400">Total PO: Rp {totalPo.toLocaleString('id-ID')}</span>
             {o.paid_at ? (
               <span className="text-emerald-400">Paid: Rp {paid.toLocaleString('id-ID')}{unpaid > 0 ? ` (sisa Rp ${unpaid.toLocaleString('id-ID')})` : ''}</span>
             ) : (
@@ -402,7 +406,7 @@ export default function AdminOrdersHistoryPage() {
             )}
           </div>
           {o.status === 'listed' && !o.paid_at && (
-            <Button type="button" variant="primary" className="mt-1 text-xs" onClick={() => { setPayModalOrderId(o.id); setPayAmount(String(paid || total)); }}>Tandai Bayar</Button>
+            <Button type="button" variant="primary" className="mt-1 text-xs" onClick={() => { setPayModalOrderId(o.id); setPayAmount(String(paid || totalPo)); }}>Tandai Bayar</Button>
           )}
           {o.status === 'listed' && o.paid_at && unpaid > 0 && (
             <Button type="button" variant="secondary" className="mt-1 text-xs" onClick={() => { setPayModalOrderId(o.id); setPayAmount(String(paid)); }}>Tambah Bayar</Button>

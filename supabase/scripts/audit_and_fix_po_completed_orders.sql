@@ -31,6 +31,23 @@ WHERE o.status = 'completed'
 ORDER BY o.id, oi.is_po DESC, oi.id;
 
 -- =============================================================================
+-- 3) AUDIT: Order campuran (PO + reguler) — Total PO vs paid_amount
+-- Untuk tracing: pastikan paid_amount hanya men track bayar bagian PO.
+-- Order f562b4c0: total semua item 298900, total PO saja 170000; paid 170000 = OK.
+-- =============================================================================
+SELECT
+  o.id AS order_id,
+  o.paid_at,
+  o.paid_amount,
+  (SELECT coalesce(sum(oi.subtotal), 0) FROM public.order_items oi WHERE oi.order_id = o.id AND oi.is_po = true) AS total_po_only,
+  (SELECT coalesce(sum(oi.subtotal), 0) FROM public.order_items oi WHERE oi.order_id = o.id) AS total_semua_item,
+  (SELECT coalesce(sum(oi.subtotal), 0) FROM public.order_items oi WHERE oi.order_id = o.id AND oi.is_po = true) - coalesce(o.paid_amount, 0) AS sisa_po
+FROM public.orders o
+WHERE EXISTS (SELECT 1 FROM public.order_items oi WHERE oi.order_id = o.id AND oi.is_po = true)
+  AND EXISTS (SELECT 1 FROM public.order_items oi WHERE oi.order_id = o.id AND oi.is_po = false)
+ORDER BY o.id;
+
+-- =============================================================================
 -- PERBAIKAN DATA (jalankan HANYA setelah konfirmasi)
 -- Efek: order yang "completed + punya item PO" diubah jadi listed, completed_at di-clear.
 -- =============================================================================
