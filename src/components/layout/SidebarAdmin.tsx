@@ -100,12 +100,13 @@ export function SidebarAdmin({ permissions = [] }: SidebarAdminProps) {
         onClick={close}
         aria-hidden
       />
-      {/* Sidebar: drawer on mobile, static on desktop */}
+      {/* Sidebar: drawer on mobile, sticky on desktop */}
       <aside
         className={clsx(
           'flex flex-col w-64 shrink-0 border-r border-slate-800/80 bg-linear-to-b from-bfl-bg to-slate-950/80',
           'max-lg:fixed max-lg:inset-y-0 max-lg:left-0 max-lg:z-50 max-lg:w-[min(280px,85vw)] max-lg:shadow-2xl max-lg:transition-transform max-lg:duration-200 max-lg:ease-out',
           'max-lg:pt-[env(safe-area-inset-top)] max-lg:pb-[env(safe-area-inset-bottom)] max-lg:pl-[env(safe-area-inset-left)]',
+          'lg:sticky lg:top-0 lg:h-dvh lg:overflow-y-auto',
           open ? 'max-lg:translate-x-0' : 'max-lg:-translate-x-full',
         )}
       >

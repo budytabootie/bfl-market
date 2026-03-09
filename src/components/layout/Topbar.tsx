@@ -17,7 +17,7 @@ export function Topbar({ permissions: permProp = [], user, variant }: TopbarProp
     'Guest';
 
   return (
-    <header className="flex items-center gap-3 sm:gap-4 px-3 sm:px-4 md:px-6 py-3 sm:py-4 border-b border-slate-800/80 bg-linear-to-r from-bfl-bg/80 to-slate-950/70 backdrop-blur shrink-0 pl-[max(0.75rem,env(safe-area-inset-left))]">
+    <header className="sticky top-0 z-20 flex items-center gap-3 sm:gap-4 px-3 sm:px-4 md:px-6 py-3 sm:py-4 border-b border-slate-800/80 bg-bfl-bg/95 backdrop-blur-md shrink-0 pl-[max(0.75rem,env(safe-area-inset-left))]">
       <button
         type="button"
         onClick={toggle}

@@ -29,11 +29,11 @@ export default async function AdminLayout({
 
   return (
     <SidebarProvider>
-      <div className="flex min-h-dvh">
+      <div className="flex h-dvh overflow-hidden">
         <SidebarAdmin permissions={permissions} />
-        <div className="flex flex-1 flex-col min-w-0">
+        <div className="flex flex-1 flex-col min-w-0 min-h-0 overflow-hidden">
           <Topbar permissions={permissions} user={user} variant="admin" />
-          <main className="flex-1 p-3 sm:p-4 md:p-6 overflow-x-hidden">{children}</main>
+          <main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-3 sm:p-4 md:p-6">{children}</main>
         </div>
       </div>
     </SidebarProvider>

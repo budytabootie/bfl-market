@@ -54,6 +54,7 @@ export default function AdminOrdersHistoryPage() {
   const [snLoading, setSnLoading] = useState(false);
   const [orderItemWeapons, setOrderItemWeapons] = useState<{ order_item_id: string }[]>([]);
   const [treasuryUsers, setTreasuryUsers] = useState<{ username: string; name: string }[]>([]);
+  const [orderTypeTab, setOrderTypeTab] = useState<'reguler' | 'po'>('reguler');
   const PAGE_SIZE = 10;
 
   /** Approver filter: gabungan dari approved_by (orders) + daftar Treasury */
@@ -460,7 +461,7 @@ export default function AdminOrdersHistoryPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {error && (
         <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
           {error}
@@ -470,110 +471,142 @@ export default function AdminOrdersHistoryPage() {
       <div className="rounded-2xl border border-slate-800/80 bg-slate-900/40 p-5">
         <h1 className="text-xl font-semibold text-slate-50">Orders History</h1>
         <p className="mt-1 text-sm text-slate-400">
-          Riwayat order Reguler dan PO. Filter status berlaku untuk kedua bagian.
+          Riwayat order Reguler dan PO. Pilih tab untuk melihat tipe order.
         </p>
       </div>
 
-      <Card title="Order Reguler" className="border-slate-700/80">
-        <TableToolbar
-          searchPlaceholder="Cari username pembeli…"
-          searchValue={search}
-          onSearchChange={(v) => { setSearch(v); setPageRegular(1); setPagePo(1); }}
-          filters={[
-            {
-              label: 'Status:',
-              options: [
-                { value: '', label: 'Semua' },
-                { value: 'pending', label: 'Pending' },
-                { value: 'completed', label: 'Completed' },
-                { value: 'cancelled', label: 'Cancelled' },
-              ],
-              value: filterStatus,
-              onChange: (v) => { setFilterStatus(v); setPageRegular(1); setPagePo(1); },
-            },
-            {
-              label: 'Approver:',
-              options: approverOptions,
-              value: filterApprover,
-              onChange: (v) => { setFilterApprover(v); setPageRegular(1); setPagePo(1); },
-            },
-          ]}
-          totalCount={regularOrders.length}
-          page={pageRegular}
-          pageSize={PAGE_SIZE}
-          onPageChange={setPageRegular}
-        />
-        {regularOrders.length === 0 ? (
-          <div className="py-8 text-center"><p className="text-slate-400">Belum ada order reguler.</p></div>
-        ) : (
-          <div className="space-y-8">
-            {groupOrdersByDate(paginatedRegular).map(({ dateKey, dateLabel, orders: dayOrders }) => (
-              <div key={dateKey} className="rounded-xl border border-slate-700/80 bg-slate-900/30 overflow-hidden">
-                <div className="px-4 py-3 border-b border-slate-700/80 bg-slate-800/50 flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="font-semibold text-slate-200">Transaksi {dateLabel}</h3>
-                  <span className="text-sm font-medium text-emerald-400">
-                    Total approved hari ini: Rp {totalApprovedForOrders(dayOrders).toLocaleString('id-ID')}
-                  </span>
-                </div>
-                <div className="p-4 space-y-4">
-                  {dayOrders.map((o) => renderOrderCard(o))}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
-
-      <Card title="Order PO" className="border-amber-500/30 bg-amber-950/10">
-        <div className="flex gap-2 mb-4 border-b border-amber-500/20 pb-2">
-          {(['bayar', 'diterima', 'selesai'] as const).map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              className={`px-4 py-2 rounded-lg text-sm font-medium ${poTab === tab ? 'bg-amber-500/30 text-amber-200' : 'text-slate-400 hover:text-slate-200'}`}
-              onClick={() => { setPoTab(tab); setPagePo(1); }}
-            >
-              {tab === 'bayar' && `Menunggu Bayar (${poOrdersMenungguBayar.length})`}
-              {tab === 'diterima' && `Menunggu Diterima (${poOrdersMenungguDiterima.length})`}
-              {tab === 'selesai' && `Selesai (${poOrdersSelesai.length})`}
-            </button>
-          ))}
+      <Card
+        title="Orders History"
+        className={orderTypeTab === 'po' ? 'border-amber-500/30 bg-amber-950/10' : 'border-slate-700/80'}
+      >
+        <div className="flex gap-2 border-b border-slate-700/80 pb-4 mb-4">
+          <button
+            type="button"
+            onClick={() => setOrderTypeTab('reguler')}
+            className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
+              orderTypeTab === 'reguler'
+                ? 'bg-bfl-primary/20 text-bfl-primary border border-bfl-primary/40'
+                : 'text-slate-400 hover:text-slate-200 border border-transparent'
+            }`}
+          >
+            Order Reguler ({regularOrders.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setOrderTypeTab('po')}
+            className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
+              orderTypeTab === 'po'
+                ? 'bg-amber-500/30 text-amber-200 border border-amber-500/40'
+                : 'text-slate-400 hover:text-slate-200 border border-transparent'
+            }`}
+          >
+            Order PO ({poOrders.length})
+          </button>
         </div>
-        <TableToolbar
-          searchPlaceholder="Cari username pembeli…"
-          searchValue={search}
-          onSearchChange={(v) => { setSearch(v); setPagePo(1); }}
-          filters={[
-            {
-              label: 'Status:',
-              options: [
-                { value: '', label: 'Semua' },
-                { value: 'pending', label: 'Pending' },
-                { value: 'listed', label: 'Listed' },
-                { value: 'completed', label: 'Completed' },
-                { value: 'cancelled', label: 'Cancelled' },
-              ],
-              value: filterStatus,
-              onChange: (v) => { setFilterStatus(v); setPagePo(1); },
-            },
-            {
-              label: 'Approver:',
-              options: approverOptions,
-              value: filterApprover,
-              onChange: (v) => { setFilterApprover(v); setPagePo(1); },
-            },
-          ]}
-          totalCount={poOrdersForTab.length}
-          page={pagePo}
-          pageSize={PAGE_SIZE}
-          onPageChange={setPagePo}
-        />
-        {poOrdersForTab.length === 0 ? (
-          <div className="py-8 text-center"><p className="text-slate-400">{poTab === 'bayar' ? 'Tidak ada order menunggu bayar.' : poTab === 'diterima' ? 'Tidak ada order menunggu diterima.' : 'Belum ada order PO selesai.'}</p></div>
+
+        {orderTypeTab === 'reguler' ? (
+          <>
+            <TableToolbar
+              searchPlaceholder="Cari username pembeli…"
+              searchValue={search}
+              onSearchChange={(v) => { setSearch(v); setPageRegular(1); setPagePo(1); }}
+              filters={[
+                {
+                  label: 'Status:',
+                  options: [
+                    { value: '', label: 'Semua' },
+                    { value: 'pending', label: 'Pending' },
+                    { value: 'completed', label: 'Completed' },
+                    { value: 'cancelled', label: 'Cancelled' },
+                  ],
+                  value: filterStatus,
+                  onChange: (v) => { setFilterStatus(v); setPageRegular(1); setPagePo(1); },
+                },
+                {
+                  label: 'Approver:',
+                  options: approverOptions,
+                  value: filterApprover,
+                  onChange: (v) => { setFilterApprover(v); setPageRegular(1); setPagePo(1); },
+                },
+              ]}
+              totalCount={regularOrders.length}
+              page={pageRegular}
+              pageSize={PAGE_SIZE}
+              onPageChange={setPageRegular}
+            />
+            {regularOrders.length === 0 ? (
+              <div className="py-8 text-center"><p className="text-slate-400">Belum ada order reguler.</p></div>
+            ) : (
+              <div className="space-y-8">
+                {groupOrdersByDate(paginatedRegular).map(({ dateKey, dateLabel, orders: dayOrders }) => (
+                  <div key={dateKey} className="rounded-xl border border-slate-700/80 bg-slate-900/30 overflow-hidden">
+                    <div className="px-4 py-3 border-b border-slate-700/80 bg-slate-800/50 flex flex-wrap items-center justify-between gap-2">
+                      <h3 className="font-semibold text-slate-200">Transaksi {dateLabel}</h3>
+                      <span className="text-sm font-medium text-emerald-400">
+                        Total approved hari ini: Rp {totalApprovedForOrders(dayOrders).toLocaleString('id-ID')}
+                      </span>
+                    </div>
+                    <div className="p-4 space-y-4">
+                      {dayOrders.map((o) => renderOrderCard(o))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
         ) : (
-          <div className="space-y-4">
-            {paginatedPo.map((o) => renderOrderCardPo(o))}
-          </div>
+          <>
+            <div className="flex gap-2 mb-4 border-b border-amber-500/20 pb-2">
+              {(['bayar', 'diterima', 'selesai'] as const).map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  className={`px-4 py-2 rounded-lg text-sm font-medium ${poTab === tab ? 'bg-amber-500/30 text-amber-200' : 'text-slate-400 hover:text-slate-200'}`}
+                  onClick={() => { setPoTab(tab); setPagePo(1); }}
+                >
+                  {tab === 'bayar' && `Menunggu Bayar (${poOrdersMenungguBayar.length})`}
+                  {tab === 'diterima' && `Menunggu Diterima (${poOrdersMenungguDiterima.length})`}
+                  {tab === 'selesai' && `Selesai (${poOrdersSelesai.length})`}
+                </button>
+              ))}
+            </div>
+            <TableToolbar
+              searchPlaceholder="Cari username pembeli…"
+              searchValue={search}
+              onSearchChange={(v) => { setSearch(v); setPagePo(1); }}
+              filters={[
+                {
+                  label: 'Status:',
+                  options: [
+                    { value: '', label: 'Semua' },
+                    { value: 'pending', label: 'Pending' },
+                    { value: 'listed', label: 'Listed' },
+                    { value: 'completed', label: 'Completed' },
+                    { value: 'cancelled', label: 'Cancelled' },
+                  ],
+                  value: filterStatus,
+                  onChange: (v) => { setFilterStatus(v); setPagePo(1); },
+                },
+                {
+                  label: 'Approver:',
+                  options: approverOptions,
+                  value: filterApprover,
+                  onChange: (v) => { setFilterApprover(v); setPagePo(1); },
+                },
+              ]}
+              totalCount={poOrdersForTab.length}
+              page={pagePo}
+              pageSize={PAGE_SIZE}
+              onPageChange={setPagePo}
+            />
+            {poOrdersForTab.length === 0 ? (
+              <div className="py-8 text-center"><p className="text-slate-400">{poTab === 'bayar' ? 'Tidak ada order menunggu bayar.' : poTab === 'diterima' ? 'Tidak ada order menunggu diterima.' : 'Belum ada order PO selesai.'}</p></div>
+            ) : (
+              <div className="space-y-4">
+                {paginatedPo.map((o) => renderOrderCardPo(o))}
+              </div>
+            )}
+          </>
         )}
       </Card>
 

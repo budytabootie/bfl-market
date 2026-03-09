@@ -44,17 +44,26 @@ export default function AdminOrdersPage() {
   const [weaponPickerLoading, setWeaponPickerLoading] = useState(false);
   const [selectedWeaponIds, setSelectedWeaponIds] = useState<string[]>([]);
   const [weaponApproveLoading, setWeaponApproveLoading] = useState(false);
+  const [orderTypeTab, setOrderTypeTab] = useState<'reguler' | 'po'>('reguler');
   const PAGE_SIZE = 5;
 
+  /** Sembunyikan order yang semua item-nya rejected (tidak ada pending, tidak ada approved) */
+  const orderNeedsAction = (orderId: string) => {
+    const orderItems = items.filter((i) => i.order_id === orderId);
+    const hasPending = orderItems.some((i) => i.status === 'pending');
+    const hasApproved = orderItems.some((i) => i.status === 'approved');
+    return hasPending || hasApproved;
+  };
+
   const regularOrders = useMemo(() => {
-    let r = pending.filter((o) => !items.some((i) => i.order_id === o.id && i.is_po));
+    let r = pending.filter((o) => !items.some((i) => i.order_id === o.id && i.is_po) && orderNeedsAction(o.id));
     const q = search.trim().toLowerCase();
     if (q) r = r.filter((o) => ((o.users as { username?: string })?.username ?? '').toLowerCase().includes(q));
     return r;
   }, [pending, search, items]);
 
   const poOrders = useMemo(() => {
-    let r = pending.filter((o) => items.some((i) => i.order_id === o.id && i.is_po));
+    let r = pending.filter((o) => items.some((i) => i.order_id === o.id && i.is_po) && orderNeedsAction(o.id));
     const q = search.trim().toLowerCase();
     if (q) r = r.filter((o) => ((o.users as { username?: string })?.username ?? '').toLowerCase().includes(q));
     return r;
@@ -162,9 +171,17 @@ export default function AdminOrdersPage() {
 
   async function rejectItem(id: string) {
     const item = items.find((i) => i.id === id);
+    const orderId = item?.order_id;
     const { error } = await supabase.from('order_items').update({ status: 'rejected' }).eq('id', id);
     if (error) throw new Error(error.message);
-    await logActivity(supabase, 'order_item.reject', 'order_items', id, { order_id: item?.order_id, item_name: (item?.catalog as { name?: string })?.name, is_po: item?.is_po });
+    await logActivity(supabase, 'order_item.reject', 'order_items', id, { order_id: orderId, item_name: (item?.catalog as { name?: string })?.name, is_po: item?.is_po });
+    if (orderId) {
+      const { data: orderItems } = await supabase.from('order_items').select('status').eq('order_id', orderId);
+      const allRejected = orderItems?.length && orderItems.every((i) => i.status === 'rejected');
+      if (allRejected) {
+        await supabase.from('orders').update({ status: 'cancelled' }).eq('id', orderId);
+      }
+    }
     await load();
   }
 
@@ -322,44 +339,75 @@ export default function AdminOrdersPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {error && (
         <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
           {error}
           <p className="mt-1 text-xs text-amber-300/80">Pastikan Anda login sebagai Super Admin atau Treasurer. Cek juga RLS policy di Supabase.</p>
         </div>
       )}
-      <Card title="Order Reguler" className="border-slate-700/80">
-        <TableToolbar
-          searchPlaceholder="Cari username…"
-          searchValue={search}
-          onSearchChange={(v) => { setSearch(v); setPageRegular(1); setPagePo(1); }}
-          totalCount={regularOrders.length}
-          page={pageRegular}
-          pageSize={PAGE_SIZE}
-          onPageChange={setPageRegular}
-        />
-        {regularOrders.length === 0 ? (
-          <p className="py-6 text-center text-slate-500 text-sm">Belum ada order reguler.</p>
+      <Card
+        title="Pending Orders"
+        className={orderTypeTab === 'po' ? 'border-amber-500/30 bg-amber-950/10' : 'border-slate-700/80'}
+      >
+        <div className="flex gap-2 border-b border-slate-700/80 pb-4 mb-4">
+          <button
+            type="button"
+            onClick={() => setOrderTypeTab('reguler')}
+            className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
+              orderTypeTab === 'reguler'
+                ? 'bg-bfl-primary/20 text-bfl-primary border border-bfl-primary/40'
+                : 'text-slate-400 hover:text-slate-200 border border-transparent'
+            }`}
+          >
+            Order Reguler ({regularOrders.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setOrderTypeTab('po')}
+            className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
+              orderTypeTab === 'po'
+                ? 'bg-amber-500/30 text-amber-200 border border-amber-500/40'
+                : 'text-slate-400 hover:text-slate-200 border border-transparent'
+            }`}
+          >
+            Order PO ({poOrders.length})
+          </button>
+        </div>
+        {orderTypeTab === 'reguler' ? (
+          <>
+            <TableToolbar
+              searchPlaceholder="Cari username…"
+              searchValue={search}
+              onSearchChange={(v) => { setSearch(v); setPageRegular(1); setPagePo(1); }}
+              totalCount={regularOrders.length}
+              page={pageRegular}
+              pageSize={PAGE_SIZE}
+              onPageChange={setPageRegular}
+            />
+            {regularOrders.length === 0 ? (
+              <p className="py-6 text-center text-slate-500 text-sm">Belum ada order reguler.</p>
+            ) : (
+              renderOrderList(paginatedRegular, pageRegular, setPageRegular)
+            )}
+          </>
         ) : (
-          renderOrderList(paginatedRegular, pageRegular, setPageRegular)
-        )}
-      </Card>
-
-      <Card title="Order PO" className="border-amber-500/30 bg-amber-950/10">
-        <TableToolbar
-          searchPlaceholder="Cari username…"
-          searchValue={search}
-          onSearchChange={(v) => { setSearch(v); setPageRegular(1); setPagePo(1); }}
-          totalCount={poOrders.length}
-          page={pagePo}
-          pageSize={PAGE_SIZE}
-          onPageChange={setPagePo}
-        />
-        {poOrders.length === 0 ? (
-          <p className="py-6 text-center text-slate-500 text-sm">Belum ada order PO.</p>
-        ) : (
-          renderOrderList(paginatedPo, pagePo, setPagePo)
+          <>
+            <TableToolbar
+              searchPlaceholder="Cari username…"
+              searchValue={search}
+              onSearchChange={(v) => { setSearch(v); setPageRegular(1); setPagePo(1); }}
+              totalCount={poOrders.length}
+              page={pagePo}
+              pageSize={PAGE_SIZE}
+              onPageChange={setPagePo}
+            />
+            {poOrders.length === 0 ? (
+              <p className="py-6 text-center text-slate-500 text-sm">Belum ada order PO.</p>
+            ) : (
+              renderOrderList(paginatedPo, pagePo, setPagePo)
+            )}
+          </>
         )}
       </Card>
 
