@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { logActivity } from '@/lib/activity';
+import { formatDateTimeWIB } from '@/lib/date-wib';
 import { TableToolbar } from '@/components/ui/TableToolbar';
 
 type WarehouseWeaponOption = { id: string; serial_number: string };
@@ -256,7 +257,7 @@ export default function AdminOrdersPage() {
                 <div className="grid grid-cols-1 gap-1 text-sm border-b border-slate-800 pb-3">
                   <div><span className="text-slate-500">ID Transaksi:</span> <span className="font-mono text-slate-300">{o.id.slice(0, 8)}…</span></div>
                   <div><span className="text-slate-500">Order oleh:</span> <span className="text-slate-200 font-medium">{buyer.username ?? '-'}</span></div>
-                  <div><span className="text-slate-500">Tanggal:</span> <span className="text-slate-300">{new Date(o.created_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</span></div>
+                  <div><span className="text-slate-500">Tanggal:</span> <span className="text-slate-300">{formatDateTimeWIB(o.created_at)}</span></div>
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <span className="text-slate-500">Status: <span className="text-amber-400">Pending</span></span>
                     {allPoItemsDecided && (

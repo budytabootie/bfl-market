@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { formatDateTimeWIB } from '@/lib/date-wib';
 import { Card } from '@/components/ui/Card';
 import { TableToolbar } from '@/components/ui/TableToolbar';
 
@@ -25,6 +26,9 @@ const ACTION_LABELS: Record<string, string> = {
   'warehouse.update_quantity': 'Update Quantity',
   'weapons.add': 'Tambah Weapon',
   'weapons.update_status': 'Update Status Weapon',
+  'weapons.edit_sn': 'Edit SN Weapon',
+  'weapons.delete': 'Hapus Weapon',
+  'weapons.change_owner': 'Ubah Owner Weapon',
   'weapon_relations.add': 'Tambah Relasi Weapon',
   'weapon_relations.delete': 'Hapus Relasi Weapon',
   'po_products.add': 'Tambah ke Produk PO',
@@ -184,7 +188,7 @@ export default function AdminActivityPage() {
           <tbody>
             {paginatedLogs.map((l) => (
               <tr key={l.id} className="border-t border-slate-800">
-                <td className="p-2 text-slate-300 whitespace-nowrap">{new Date(l.created_at).toLocaleString('id-ID')}</td>
+                <td className="p-2 text-slate-300 whitespace-nowrap">{formatDateTimeWIB(l.created_at)}</td>
                 <td className="p-2 text-slate-300">{l.username ?? '-'}</td>
                 <td className="p-2">
                   <span className="rounded px-2 py-0.5 bg-slate-700/80 text-slate-200" title={l.action}>

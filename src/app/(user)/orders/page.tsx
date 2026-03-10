@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { formatDateTimeWIB } from '@/lib/date-wib';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import Link from 'next/link';
@@ -73,7 +74,7 @@ export default function MyOrdersPage() {
             {orders.map((o) => (
               <div key={o.id} className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
                 <div className="flex justify-between text-sm">
-                  <span>{o.id.slice(0, 8)}… • {new Date(o.created_at).toLocaleString()}</span>
+                  <span>{o.id.slice(0, 8)}… • {formatDateTimeWIB(o.created_at)}</span>
                   <span className={`capitalize ${o.status === 'completed' ? 'text-emerald-400' : 'text-amber-400'}`}>{o.status}</span>
                 </div>
                 <div className="mt-2 text-xs">

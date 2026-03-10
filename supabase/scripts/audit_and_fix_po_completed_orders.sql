@@ -64,3 +64,30 @@ BEGIN;
   -- GET DIAGNOSTICS atau lihat result "X rows updated"
 COMMIT;
 */
+
+-- =============================================================================
+-- 4) AUDIT: Order status masih pending tapi semua item rejected
+-- Order seperti ini tidak perlu muncul di Pending Orders (sudah difilter di UI).
+-- Opsional: set status = 'cancelled' supaya konsisten.
+-- =============================================================================
+SELECT
+  o.id AS order_id,
+  o.status,
+  o.created_at,
+  (SELECT count(*) FROM public.order_items oi WHERE oi.order_id = o.id) AS total_items,
+  (SELECT count(*) FROM public.order_items oi WHERE oi.order_id = o.id AND oi.status = 'rejected') AS rejected_count
+FROM public.orders o
+WHERE o.status = 'pending'
+  AND EXISTS (SELECT 1 FROM public.order_items oi WHERE oi.order_id = o.id)
+  AND NOT EXISTS (SELECT 1 FROM public.order_items oi WHERE oi.order_id = o.id AND oi.status = 'pending')
+  AND NOT EXISTS (SELECT 1 FROM public.order_items oi WHERE oi.order_id = o.id AND oi.status = 'approved');
+
+-- Opsional perbaikan: set order ke cancelled (jalankan setelah konfirmasi)
+/*
+UPDATE public.orders o
+SET status = 'cancelled'
+WHERE o.status = 'pending'
+  AND EXISTS (SELECT 1 FROM public.order_items oi WHERE oi.order_id = o.id)
+  AND NOT EXISTS (SELECT 1 FROM public.order_items oi WHERE oi.order_id = o.id AND oi.status = 'pending')
+  AND NOT EXISTS (SELECT 1 FROM public.order_items oi WHERE oi.order_id = o.id AND oi.status = 'approved');
+*/

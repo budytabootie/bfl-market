@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { TableToolbar } from '@/components/ui/TableToolbar';
+import { formatDateLabelWIB, formatDateShortWIB, formatDateTimeWIB, getDateKeyWIB } from '@/lib/date-wib';
 import Link from 'next/link';
 
 type Order = {
@@ -157,16 +158,12 @@ export default function AdminOrdersHistoryPage() {
     return poOrdersForTab.slice(from, from + PAGE_SIZE);
   }, [poOrdersForTab, pagePo]);
 
-  /** Group orders by transaction date (created_at, local date) for clearer separation and per-day totals */
+  /** Group orders by transaction date (created_at) in WIB */
   function groupOrdersByDate(orderList: Order[]) {
     const map = new Map<string, { dateKey: string; dateLabel: string; orders: Order[] }>();
     for (const o of orderList) {
-      const d = new Date(o.created_at);
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      const dateKey = `${y}-${m}-${day}`;
-      const dateLabel = d.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+      const dateKey = getDateKeyWIB(o.created_at);
+      const dateLabel = formatDateLabelWIB(o.created_at);
       if (!map.has(dateKey)) map.set(dateKey, { dateKey, dateLabel, orders: [] });
       map.get(dateKey)!.orders.push(o);
     }
@@ -324,7 +321,7 @@ export default function AdminOrdersHistoryPage() {
         <div className="grid grid-cols-1 gap-1 text-sm border-b border-slate-800 pb-3">
           <div><span className="text-slate-500">ID Transaksi:</span> <span className="font-mono text-slate-300">{o.id.slice(0, 8)}…</span></div>
           <div><span className="text-slate-500">Order oleh:</span> <span className="text-slate-200 font-medium">{buyer.username ?? buyer.name ?? '-'}</span></div>
-          <div><span className="text-slate-500">Tanggal:</span> <span className="text-slate-300">{new Date(o.created_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</span></div>
+          <div><span className="text-slate-500">Tanggal:</span> <span className="text-slate-300">{formatDateTimeWIB(o.created_at)}</span></div>
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-slate-500">Status:</span>
             <span className={`rounded px-2 py-0.5 text-xs capitalize ${o.status === 'completed' ? 'bg-emerald-500/20 text-emerald-400' : o.status === 'cancelled' ? 'bg-red-500/20 text-red-400' : 'bg-amber-500/20 text-amber-400'}`}>
@@ -395,7 +392,7 @@ export default function AdminOrdersHistoryPage() {
         <div className="grid grid-cols-1 gap-1 text-sm border-b border-slate-800 pb-3">
           <div><span className="text-slate-500">ID:</span> <span className="font-mono text-slate-300">{o.id.slice(0, 8)}…</span></div>
           <div><span className="text-slate-500">Order oleh:</span> <span className="text-slate-200 font-medium">{buyer.username ?? buyer.name ?? '-'}</span></div>
-          <div><span className="text-slate-500">Tanggal:</span> <span className="text-slate-300">{new Date(o.created_at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}</span></div>
+          <div><span className="text-slate-500">Tanggal:</span> <span className="text-slate-300">{formatDateTimeWIB(o.created_at)}</span></div>
           <div className="flex flex-wrap items-center gap-3">
             <span className="text-slate-500">Status:</span>
             <span className={`rounded px-2 py-0.5 text-xs capitalize ${o.status === 'completed' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}`}>{o.status}</span>
@@ -434,8 +431,8 @@ export default function AdminOrdersHistoryPage() {
                     <td className="p-2 truncate">{(i.catalog as { name?: string })?.name ?? '-'}</td>
                     <td className="p-2 text-right">{i.quantity}</td>
                     <td className="p-2 text-right">{Number(i.subtotal).toLocaleString('id-ID')}</td>
-                    <td className="p-2 text-center">{i.ready_for_receive_at ? new Date(i.ready_for_receive_at).toLocaleDateString('id-ID') : '-'}</td>
-                    <td className="p-2 text-center">{i.received_at ? new Date(i.received_at).toLocaleDateString('id-ID') : '-'}</td>
+                    <td className="p-2 text-center">{i.ready_for_receive_at ? formatDateShortWIB(i.ready_for_receive_at) : '-'}</td>
+                    <td className="p-2 text-center">{i.received_at ? formatDateShortWIB(i.received_at) : '-'}</td>
                     <td className="p-2">
                       {o.status === 'listed' && !i.ready_for_receive_at && (
                         <Button type="button" variant="secondary" className="py-1! px-2! min-h-0! text-xs" onClick={() => markItemReadyForReceive(i.id)}>Tandai Dikirim</Button>
