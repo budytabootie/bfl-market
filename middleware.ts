@@ -15,6 +15,7 @@ export async function middleware(request: NextRequest) {
     if (!user) {
       const url = new URL('/login', request.url);
       url.searchParams.set('redirect', CHANGE_PASSWORD_PATH);
+      url.searchParams.set('reason', 'session_expired');
       return NextResponse.redirect(url);
     }
     return response;
@@ -39,6 +40,7 @@ export async function middleware(request: NextRequest) {
   if (!user) {
     const url = new URL('/login', request.url);
     url.searchParams.set('redirect', pathname);
+    url.searchParams.set('reason', 'session_expired');
     return NextResponse.redirect(url);
   }
 

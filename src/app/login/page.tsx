@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 export default function LoginPage() {
   const searchParams = useSearchParams();
   const redirect = searchParams.get('redirect') ?? '/';
+  const reason = searchParams.get('reason');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -51,6 +52,11 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-dvh items-center justify-center bg-bfl-bg p-4 safe-area-inset">
       <Card title="Login" className="w-full max-w-sm mx-auto">
+        {reason === 'session_expired' && (
+          <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200 mb-4">
+            Session habis (24 jam). Silakan login lagi.
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
             <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200">
