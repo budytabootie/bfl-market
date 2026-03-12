@@ -134,14 +134,10 @@ export default function AdminOrdersHistoryPage() {
     });
   }, [poOrders, items]);
 
+  /** Listed + sudah bayar: bisa masih ada item belum received, atau semua received tapi belum klik Selesaikan PO */
   const poOrdersMenungguDiterima = useMemo(() => {
-    return poOrders.filter((o) => {
-      if (o.status !== 'listed') return false;
-      if (!o.paid_at) return false;
-      const orderItems = items.filter((i) => i.order_id === o.id && i.is_po);
-      return orderItems.some((i) => !i.received_at);
-    });
-  }, [poOrders, items]);
+    return poOrders.filter((o) => o.status === 'listed' && o.paid_at);
+  }, [poOrders]);
 
   const poOrdersSelesai = useMemo(() => {
     return poOrders.filter((o) => o.status === 'completed');
