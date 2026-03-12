@@ -6,17 +6,10 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { MARKETPLACE_CATEGORIES, CATEGORY_LABELS } from '@/lib/catalog-categories';
 
 type CatalogItem = { id: string; name: string; category: string; base_price: number; image_url?: string | null };
 
-const CATEGORIES = ['ammo', 'vest', 'attachment', 'weapon', 'barham'] as const;
-const CATEGORY_LABELS: Record<string, string> = {
-  ammo: 'Ammo',
-  vest: 'Vest',
-  attachment: 'Attachment',
-  weapon: 'Weapon',
-  barham: 'Barham',
-};
 const CART_KEY = 'bfl-cart';
 
 export default function PoMarketplacePage() {
@@ -146,7 +139,7 @@ export default function PoMarketplacePage() {
           >
             All
           </button>
-          {CATEGORIES.map((c) => (
+          {MARKETPLACE_CATEGORIES.map((c) => (
             <button
               key={c}
               type="button"

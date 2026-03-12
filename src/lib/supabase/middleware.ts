@@ -2,7 +2,18 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
+const SESSION_MAX_AGE_SEC = 60 * 60 * 24; // 24 jam
+
+const COOKIE_DEFAULTS: CookieOptions = {
+  path: '/',
+  maxAge: SESSION_MAX_AGE_SEC,
+  sameSite: 'lax',
+  secure: process.env.NODE_ENV === 'production',
+  httpOnly: true,
+};
+
 export async function updateSession(request: NextRequest) {
+  const cookieStore = new Map<string, CookieOptions>();
   let response = NextResponse.next({
     request: {
       headers: request.headers,
@@ -24,20 +35,22 @@ export async function updateSession(request: NextRequest) {
         return request.cookies.get(name)?.value;
       },
       set(name: string, value: string, options: CookieOptions) {
+        cookieStore.set(name, { ...COOKIE_DEFAULTS, ...options });
         response = NextResponse.next({
           request: {
             headers: request.headers,
           },
         });
-        response.cookies.set({ name, value, ...options });
+        response.cookies.set({ name, value, ...COOKIE_DEFAULTS, ...options });
       },
       remove(name: string, options: CookieOptions) {
+        cookieStore.set(name, { ...COOKIE_DEFAULTS, ...options, maxAge: 0 });
         response = NextResponse.next({
           request: {
             headers: request.headers,
           },
         });
-        response.cookies.set({ name, value: '', ...options });
+        response.cookies.set({ name, value: '', ...COOKIE_DEFAULTS, ...options, maxAge: 0 });
       },
     },
   });
@@ -64,7 +77,8 @@ export async function updateSession(request: NextRequest) {
     request: { headers: outgoingHeaders },
   });
   response.cookies.getAll().forEach((c) => {
-    finalResponse.cookies.set(c.name, c.value, { path: '/' });
+    const opts = cookieStore.get(c.name) ?? COOKIE_DEFAULTS;
+    finalResponse.cookies.set(c.name, c.value, opts);
   });
 
   return { response: finalResponse, user, permissions, mustChangePassword };

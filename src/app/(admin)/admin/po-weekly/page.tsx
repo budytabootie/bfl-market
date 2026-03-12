@@ -7,19 +7,12 @@ import { Button } from '@/components/ui/Button';
 import { logActivity } from '@/lib/activity';
 import { Input } from '@/components/ui/Input';
 import Link from 'next/link';
+import { CATEGORY_LABELS } from '@/lib/catalog-categories';
 
 type PoProduct = {
   id: string;
   catalog_id: string;
   catalog: { name: string; category: string; base_price: number } | null;
-};
-
-const CATEGORY_LABELS: Record<string, string> = {
-  ammo: 'Ammo',
-  vest: 'Vest',
-  attachment: 'Attachment',
-  weapon: 'Weapon',
-  barham: 'Barham',
 };
 
 function getWeekOptions(startDay = 1, count = 6): { value: string; label: string }[] {

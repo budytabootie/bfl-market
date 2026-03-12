@@ -7,20 +7,12 @@ import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { TableToolbar } from '@/components/ui/TableToolbar';
+import { MARKETPLACE_CATEGORIES, CATEGORY_LABELS } from '@/lib/catalog-categories';
 
 type CatalogItem = { id: string; name: string; category: string; base_price: number; image_url?: string | null };
 
 type WeaponAddon = { id: string; name: string; base_price: number };
 type WeaponAddons = { attachments: WeaponAddon[]; ammo: WeaponAddon[] };
-
-const CATEGORIES = ['ammo', 'vest', 'attachment', 'weapon', 'barham'] as const;
-const CATEGORY_LABELS: Record<string, string> = {
-  ammo: 'Ammo',
-  vest: 'Vest',
-  attachment: 'Attachment',
-  weapon: 'Weapon',
-  barham: 'Barham',
-};
 
 const PAGE_SIZE = 10;
 
@@ -124,6 +116,7 @@ export default function MarketplacePage() {
           .from('catalog')
           .select('id, name, category, base_price, image_url')
           .eq('status', 'active')
+          .in('category', MARKETPLACE_CATEGORIES)
           .order('category')
           .order('name');
         setItems((data ?? []) as CatalogItem[]);
@@ -245,7 +238,7 @@ export default function MarketplacePage() {
             filters={[
               {
                 label: 'Kategori:',
-                options: [{ value: '', label: 'Semua' }, ...CATEGORIES.map((c) => ({ value: c, label: CATEGORY_LABELS[c] ?? c }))],
+                options: [{ value: '', label: 'Semua' }, ...MARKETPLACE_CATEGORIES.map((c) => ({ value: c, label: CATEGORY_LABELS[c] ?? c }))],
                 value: filterCategory,
                 onChange: (v) => { setFilterCategory(v); setPage(1); },
               },

@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { logActivity } from '@/lib/activity';
 import { TableToolbar } from '@/components/ui/TableToolbar';
+import { ALL_CATEGORIES, CATEGORY_LABELS } from '@/lib/catalog-categories';
 
 type CatalogItem = { id: string; name: string; category: string };
 type WarehouseItem = { id: string; catalog_id: string; quantity: number; catalog: { name: string; category?: string } };
@@ -97,7 +98,7 @@ export default function AdminWarehousePage() {
           >
             <option value="">Pilih barang</option>
             {catalog.map((c) => (
-              <option key={c.id} value={c.id}>{c.name} ({c.category})</option>
+              <option key={c.id} value={c.id}>{c.name} ({CATEGORY_LABELS[c.category] ?? c.category})</option>
             ))}
           </select>
           <input
@@ -118,10 +119,7 @@ export default function AdminWarehousePage() {
               label: 'Kategori:',
               options: [
                 { value: '', label: 'Semua' },
-                { value: 'ammo', label: 'Ammo' },
-                { value: 'vest', label: 'Vest' },
-                { value: 'attachment', label: 'Attachment' },
-                { value: 'barham', label: 'Barham' },
+                ...ALL_CATEGORIES.filter((cat) => cat !== 'weapon').map((cat) => ({ value: cat, label: CATEGORY_LABELS[cat] ?? cat })),
               ],
               value: filterCategory,
               onChange: (v) => { setFilterCategory(v); setPage(1); },

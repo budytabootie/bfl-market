@@ -23,7 +23,8 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
     setSuccess(false);
-    const email = usernameToBflEmail(username);
+    const normalizedUsername = String(username).trim().toLowerCase();
+    const email = usernameToBflEmail(normalizedUsername);
     const { data: signInData, error: err } = await supabase.auth.signInWithPassword({ email, password });
     if (err) {
       setError(err.message);
@@ -52,7 +53,10 @@ export default function LoginPage() {
       <Card title="Login" className="w-full max-w-sm mx-auto">
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
-            <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200">{error}</div>
+            <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200">
+              <p>{error}</p>
+              <p className="mt-1.5 text-red-300/90">Pastikan tidak ada spasi di awal/akhir username. Jika lupa password, minta admin untuk reset.</p>
+            </div>
           )}
           <div>
             <label className="text-xs text-slate-400">Username</label>

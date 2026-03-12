@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { logActivity } from '@/lib/activity';
 import { TableToolbar } from '@/components/ui/TableToolbar';
 import Link from 'next/link';
+import { MARKETPLACE_CATEGORIES, CATEGORY_LABELS } from '@/lib/catalog-categories';
 
 type CatalogRow = {
   id: string;
@@ -17,14 +18,6 @@ type CatalogRow = {
 };
 
 type PoProduct = { id: string; catalog_id: string };
-
-const CATEGORY_LABELS: Record<string, string> = {
-  ammo: 'Ammo',
-  vest: 'Vest',
-  attachment: 'Attachment',
-  weapon: 'Weapon',
-  barham: 'Barham',
-};
 
 export default function AdminPoProductsPage() {
   const supabase = createClient();
@@ -42,6 +35,7 @@ export default function AdminPoProductsPage() {
       .from('catalog')
       .select('id, name, category, base_price, status')
       .eq('status', 'active')
+      .in('category', MARKETPLACE_CATEGORIES)
       .order('name');
     setCatalog((cat ?? []) as CatalogRow[]);
 
@@ -114,7 +108,7 @@ export default function AdminPoProductsPage() {
           filters={[
             {
               label: 'Kategori:',
-              options: [{ value: '', label: 'Semua' }, ...['ammo', 'vest', 'attachment', 'weapon', 'barham'].map((c) => ({ value: c, label: CATEGORY_LABELS[c] ?? c }))],
+              options: [{ value: '', label: 'Semua' }, ...MARKETPLACE_CATEGORIES.map((c) => ({ value: c, label: CATEGORY_LABELS[c] ?? c }))],
               value: filterCategory,
               onChange: (v) => { setFilterCategory(v); setPage(1); },
             },

@@ -10,6 +10,7 @@ import { Select } from '@/components/ui/Select';
 import { ImageUploadInput } from '@/components/ui/ImageUploadInput';
 import { TableToolbar } from '@/components/ui/TableToolbar';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { ALL_CATEGORIES, CATEGORY_LABELS, type CatalogCategory } from '@/lib/catalog-categories';
 
 type CatalogRow = {
   id: string;
@@ -20,16 +21,7 @@ type CatalogRow = {
   image_url: string | null;
 };
 
-const CATEGORIES = ['ammo', 'vest', 'attachment', 'weapon', 'barham'] as const;
 const STATUSES = ['active', 'inactive'] as const;
-
-const CATEGORY_LABELS: Record<string, string> = {
-  ammo: 'Ammo',
-  vest: 'Vest',
-  attachment: 'Attachment',
-  weapon: 'Weapon',
-  barham: 'Barham',
-};
 
 export default function AdminCatalogPage() {
   const supabase = createClient();
@@ -37,7 +29,7 @@ export default function AdminCatalogPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState('');
-  const [category, setCategory] = useState<(typeof CATEGORIES)[number]>('barham');
+  const [category, setCategory] = useState<CatalogCategory>('barham');
   const [basePrice, setBasePrice] = useState(0);
   const [status, setStatus] = useState<(typeof STATUSES)[number]>('active');
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -53,7 +45,7 @@ export default function AdminCatalogPage() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [editing, setEditing] = useState<CatalogRow | null>(null);
   const [editName, setEditName] = useState('');
-  const [editCategory, setEditCategory] = useState<(typeof CATEGORIES)[number]>('ammo');
+  const [editCategory, setEditCategory] = useState<CatalogCategory>('ammo');
   const [editBasePrice, setEditBasePrice] = useState(0);
   const [editStatus, setEditStatus] = useState<(typeof STATUSES)[number]>('active');
   const [editImageFile, setEditImageFile] = useState<File | null>(null);
@@ -74,7 +66,7 @@ export default function AdminCatalogPage() {
     load().finally(() => setLoading(false));
   }, []);
 
-  const categoryCounts = CATEGORIES.reduce((acc, c) => {
+  const categoryCounts = ALL_CATEGORIES.reduce((acc, c) => {
     acc[c] = items.filter((i) => i.category === c).length;
     return acc;
   }, {} as Record<string, number>);
@@ -143,7 +135,7 @@ export default function AdminCatalogPage() {
   function openEdit(r: CatalogRow) {
     setEditing(r);
     setEditName(r.name);
-    setEditCategory(r.category as (typeof CATEGORIES)[number]);
+    setEditCategory(r.category as CatalogCategory);
     setEditBasePrice(Number(r.base_price));
     setEditStatus(r.status as (typeof STATUSES)[number]);
     setEditImageFile(null);
@@ -230,7 +222,7 @@ export default function AdminCatalogPage() {
 
       <Card title="Summary per Category">
         <div className="flex flex-wrap gap-4">
-          {CATEGORIES.map((c) => (
+          {ALL_CATEGORIES.map((c) => (
             <div key={c} className="rounded-xl border border-slate-700/60 bg-slate-800/30 px-5 py-4 ring-1 ring-slate-700/20">
               <span className="text-xs font-medium uppercase tracking-wider text-slate-500">{CATEGORY_LABELS[c] ?? c}</span>
               <p className="mt-1 text-2xl font-bold text-slate-100">{categoryCounts[c] ?? 0}</p>
@@ -247,8 +239,8 @@ export default function AdminCatalogPage() {
           </div>
           <div className="min-w-[120px]">
             <label className="form-label">Category</label>
-            <Select value={category} onChange={(e) => setCategory(e.target.value as (typeof CATEGORIES)[number])}>
-              {CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_LABELS[c] ?? c}</option>)}
+            <Select value={category} onChange={(e) => setCategory(e.target.value as CatalogCategory)}>
+              {ALL_CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_LABELS[c] ?? c}</option>)}
             </Select>
           </div>
           <div className="min-w-[100px]">
@@ -282,7 +274,7 @@ export default function AdminCatalogPage() {
           filters={[
             {
               label: 'Kategori:',
-              options: [{ value: '', label: 'Semua' }, ...CATEGORIES.map((c) => ({ value: c, label: CATEGORY_LABELS[c] ?? c }))],
+              options: [{ value: '', label: 'Semua' }, ...ALL_CATEGORIES.map((c) => ({ value: c, label: CATEGORY_LABELS[c] ?? c }))],
               value: filterCategory,
               onChange: (v) => { setFilterCategory(v); setPage(1); },
             },
@@ -370,8 +362,8 @@ export default function AdminCatalogPage() {
                 </div>
                 <div>
                   <label className="form-label">Category</label>
-                  <Select value={editCategory} onChange={(e) => setEditCategory(e.target.value as (typeof CATEGORIES)[number])}>
-                    {CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_LABELS[c] ?? c}</option>)}
+                  <Select value={editCategory} onChange={(e) => setEditCategory(e.target.value as CatalogCategory)}>
+                    {ALL_CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_LABELS[c] ?? c}</option>)}
                   </Select>
                 </div>
                 <div>
