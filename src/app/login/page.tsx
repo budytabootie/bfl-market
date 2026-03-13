@@ -26,7 +26,13 @@ export default function LoginPage() {
     setSuccess(false);
     const normalizedUsername = String(username).trim().toLowerCase();
     const normalizedPassword = String(password).trim();
+    if (!normalizedUsername || !normalizedPassword) {
+      setError('Username dan password wajib diisi.');
+      setLoading(false);
+      return;
+    }
     const email = usernameToBflEmail(normalizedUsername);
+    // Supabase auth returns 400 (token?grant_type=password) when credentials invalid; console "Failed to load resource" is normal for that.
     const { data: signInData, error: err } = await supabase.auth.signInWithPassword({ email, password: normalizedPassword });
     if (err) {
       setError(err.message);
