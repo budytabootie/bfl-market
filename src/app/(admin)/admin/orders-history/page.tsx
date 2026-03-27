@@ -50,9 +50,10 @@ export default function AdminOrdersHistoryPage() {
   const [payModalOrderId, setPayModalOrderId] = useState<string | null>(null);
   const [payAmount, setPayAmount] = useState('');
   const [payLoading, setPayLoading] = useState(false);
-  const [snModalItem, setSnModalItem] = useState<{ orderId: string; itemId: string; catalogId: string; itemName: string; userId: string } | null>(null);
+  const [snModalItem, setSnModalItem] = useState<{ orderId: string; itemId: string; catalogId: string; itemName: string } | null>(null);
   const [snInput, setSnInput] = useState('');
   const [snLoading, setSnLoading] = useState(false);
+  const [canAssignSn, setCanAssignSn] = useState(false);
   const [orderItemWeapons, setOrderItemWeapons] = useState<{ order_item_id: string }[]>([]);
   const [treasuryUsers, setTreasuryUsers] = useState<{ username: string; name: string }[]>([]);
   const [orderTypeTab, setOrderTypeTab] = useState<'reguler' | 'po'>('reguler');
@@ -171,6 +172,8 @@ export default function AdminOrdersHistoryPage() {
   async function load() {
     setError(null);
     try {
+      const { data: canAssign } = await supabase.rpc('is_superadmin_or_treasurer');
+      setCanAssignSn(!!canAssign);
       await supabase.rpc('auto_receive_po_items');
       const { data: ord, error: ordErr } = await supabase
         .from('orders')
@@ -208,8 +211,23 @@ export default function AdminOrdersHistoryPage() {
         const itemList = (it ?? []) as unknown as OrderItem[];
         setItems(itemList);
         const itemIds = itemList.map((x) => x.id);
-        const { data: oiw } = await supabase.from('order_item_weapons').select('order_item_id').in('order_item_id', itemIds);
-        setOrderItemWeapons((oiw ?? []) as { order_item_id: string }[]);
+        if (itemIds.length === 0) {
+          setOrderItemWeapons([]);
+        } else {
+          // Avoid oversized URL/query when order history is large.
+          const CHUNK_SIZE = 200;
+          const merged: { order_item_id: string }[] = [];
+          for (let i = 0; i < itemIds.length; i += CHUNK_SIZE) {
+            const chunk = itemIds.slice(i, i + CHUNK_SIZE);
+            const { data: oiwChunk, error: oiwErr } = await supabase
+              .from('order_item_weapons')
+              .select('order_item_id')
+              .in('order_item_id', chunk);
+            if (oiwErr) throw new Error(`Order item weapons: ${oiwErr.message}`);
+            merged.push(...((oiwChunk ?? []) as { order_item_id: string }[]));
+          }
+          setOrderItemWeapons(merged);
+        }
       } else {
         setItems([]);
         setOrderItemWeapons([]);
@@ -249,15 +267,21 @@ export default function AdminOrdersHistoryPage() {
     await load();
   }
 
-  async function assignSnWeaponPo(orderId: string, itemId: string, catalogId: string, sn: string, userId: string) {
+  async function assignSnWeaponPo(orderId: string, itemId: string, catalogId: string, sn: string) {
+    if (!canAssignSn) {
+      setError('Tidak punya izin assign SN. Gunakan akun Super Admin / Treasurer.');
+      return;
+    }
     setSnLoading(true);
     setError(null);
     try {
-      const { data: w, error: insErr } = await supabase.from('warehouse_weapons').insert({ catalog_id: catalogId, serial_number: sn, status: 'in_use', owner_id: userId }).select('id').single();
-      if (insErr) throw new Error(insErr.code === '23505' ? 'Serial number sudah dipakai' : insErr.message);
-      if (!w) throw new Error('Gagal insert weapon');
-      const { error: linkErr } = await supabase.from('order_item_weapons').insert({ order_item_id: itemId, warehouse_weapon_id: (w as { id: string }).id });
-      if (linkErr) throw new Error(linkErr.message);
+      const { error: rpcErr } = await supabase.rpc('assign_po_weapon_sn', {
+        p_order_id: orderId,
+        p_item_id: itemId,
+        p_catalog_id: catalogId,
+        p_sn: sn,
+      });
+      if (rpcErr) throw new Error(rpcErr.message);
       setSnModalItem(null);
       setSnInput('');
       await load();
@@ -434,7 +458,14 @@ export default function AdminOrdersHistoryPage() {
                         <Button type="button" variant="secondary" className="py-1! px-2! min-h-0! text-xs" onClick={() => markItemReadyForReceive(i.id)}>Tandai Dikirim</Button>
                       )}
                       {o.status === 'listed' && isWeapon && !hasSn && (
-                        <Button type="button" variant="primary" className="py-1! px-2! min-h-0! text-xs ml-1" onClick={() => setSnModalItem({ orderId: o.id, itemId: i.id, catalogId: i.catalog_id, itemName: (i.catalog as { name?: string })?.name ?? '', userId: o.user_id })}>Assign SN</Button>
+                        <Button
+                          type="button"
+                          variant="primary"
+                          className="py-1! px-2! min-h-0! text-xs ml-1"
+                          disabled={!canAssignSn}
+                          title={!canAssignSn ? 'Hanya Super Admin / Treasurer yang bisa assign SN' : undefined}
+                          onClick={() => setSnModalItem({ orderId: o.id, itemId: i.id, catalogId: i.catalog_id, itemName: (i.catalog as { name?: string })?.name ?? '' })}
+                        >Assign SN</Button>
                       )}
                       {isWeapon && hasSn && <span className="text-emerald-400 text-xs">SN ✓</span>}
                     </td>
@@ -628,6 +659,7 @@ export default function AdminOrdersHistoryPage() {
           <div className="rounded-2xl border border-slate-700 bg-slate-900 shadow-xl w-full max-w-sm p-5" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-slate-100">Assign SN Weapon</h3>
             <p className="mt-1 text-sm text-slate-400">Item: {snModalItem.itemName}. Masukkan serial number (barang dari supplier).</p>
+            {!canAssignSn && <p className="mt-1 text-xs text-amber-300">Tidak punya izin assign SN (khusus Super Admin / Treasurer).</p>}
             <input
               type="text"
               className="mt-2 w-full rounded-xl border border-slate-600 bg-slate-800 px-3 py-2 text-slate-200"
@@ -637,7 +669,7 @@ export default function AdminOrdersHistoryPage() {
             />
             <div className="mt-4 flex gap-2 justify-end">
               <Button variant="secondary" onClick={() => { setSnModalItem(null); setSnInput(''); }} disabled={snLoading}>Batal</Button>
-              <Button variant="primary" onClick={() => snInput.trim() && assignSnWeaponPo(snModalItem.orderId, snModalItem.itemId, snModalItem.catalogId, snInput.trim(), snModalItem.userId)} disabled={snLoading || !snInput.trim()}>{snLoading ? '…' : 'Simpan'}</Button>
+              <Button variant="primary" onClick={() => snInput.trim() && assignSnWeaponPo(snModalItem.orderId, snModalItem.itemId, snModalItem.catalogId, snInput.trim())} disabled={snLoading || !snInput.trim() || !canAssignSn}>{snLoading ? '…' : 'Simpan'}</Button>
             </div>
           </div>
         </div>
