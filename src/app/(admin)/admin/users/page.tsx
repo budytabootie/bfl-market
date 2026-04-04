@@ -17,6 +17,8 @@ type UserRow = {
 
 type Role = { id: string; key: string; name: string };
 
+const MAX_USERS_FETCH = 2000;
+
 export default function AdminUsersPage() {
   const supabase = createClient();
   const [users, setUsers] = useState<UserRow[]>([]);
@@ -66,16 +68,24 @@ export default function AdminUsersPage() {
   const [editUsername, setEditUsername] = useState('');
   const [editRoleId, setEditRoleId] = useState('');
   const [editDiscordId, setEditDiscordId] = useState('');
+  const [usersTruncated, setUsersTruncated] = useState(false);
 
   async function load() {
     setError(null);
     const errs: string[] = [];
-    const { data: u, error: uErr } = await supabase.from('users').select('id, name, username, discord_id, role_id, must_change_password, roles(key, name)');
+    const { data: u, error: uErr } = await supabase
+      .from('users')
+      .select('id, name, username, discord_id, role_id, must_change_password, roles(key, name)')
+      .order('username')
+      .limit(MAX_USERS_FETCH);
     if (uErr) {
       errs.push(`users: ${uErr.message}`);
       setUsers([]);
+      setUsersTruncated(false);
     } else {
-      setUsers((u ?? []) as unknown as UserRow[]);
+      const rows = (u ?? []) as unknown as UserRow[];
+      setUsers(rows);
+      setUsersTruncated(rows.length >= MAX_USERS_FETCH);
     }
     const { data: r, error: rErr } = await supabase.from('roles').select('id, key, name');
     if (rErr) {
@@ -317,6 +327,11 @@ export default function AdminUsersPage() {
         {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
       </Card>
       <Card title="Users">
+        {usersTruncated && (
+          <p className="mb-3 text-xs text-amber-200/90 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2">
+            Menampilkan hingga {MAX_USERS_FETCH} user (urut username). Jika organisasi lebih besar, pertimbangkan pencarian server-side di versi berikutnya.
+          </p>
+        )}
         <TableToolbar
           searchPlaceholder="Cari nama atau username…"
           searchValue={search}

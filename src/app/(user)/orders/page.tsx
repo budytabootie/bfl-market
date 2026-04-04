@@ -25,19 +25,29 @@ type OrderItem = {
   received_at: string | null;
 };
 
+const MAX_MY_ORDERS = 200;
+
 export default function MyOrdersPage() {
   const supabase = createClient();
   const [orders, setOrders] = useState<Order[]>([]);
   const [items, setItems] = useState<OrderItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [ordersTruncated, setOrdersTruncated] = useState(false);
 
   async function load() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     const { data: profile } = await supabase.from('users').select('id').eq('id', user.id).single();
     if (!profile) return;
-    const { data: ord } = await supabase.from('orders').select('id, created_at, status').eq('user_id', profile.id).order('created_at', { ascending: false });
-    setOrders((ord ?? []) as Order[]);
+    const { data: ord } = await supabase
+      .from('orders')
+      .select('id, created_at, status')
+      .eq('user_id', profile.id)
+      .order('created_at', { ascending: false })
+      .limit(MAX_MY_ORDERS);
+    const list = (ord ?? []) as Order[];
+    setOrders(list);
+    setOrdersTruncated(list.length >= MAX_MY_ORDERS);
     const ids = (ord ?? []).map((o) => o.id);
     if (ids.length > 0) {
       const { data: it } = await supabase.from('order_items').select('id, order_id, catalog(name), quantity, status, subtotal, is_po, ready_for_receive_at, received_at').in('order_id', ids);
@@ -64,6 +74,11 @@ export default function MyOrdersPage() {
         <p className="mt-1 text-sm text-slate-400">Riwayat order Anda. Status akan diperbarui oleh admin setelah diproses.</p>
       </div>
       <Card title="My Orders">
+        {ordersTruncated && (
+          <p className="mb-3 text-xs text-amber-200/90 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2">
+            Menampilkan {MAX_MY_ORDERS} order terbaru saja.
+          </p>
+        )}
         {orders.length === 0 ? (
           <div className="text-center py-8">
             <p className="text-slate-400 mb-3">Belum ada order.</p>

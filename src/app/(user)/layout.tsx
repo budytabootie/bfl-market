@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
+import { getCurrentUserPermissionsCached } from '@/lib/server-permissions';
 import { SidebarUser } from '@/components/layout/SidebarUser';
 import { SidebarProvider } from '@/components/layout/SidebarContext';
 import { Topbar } from '@/components/layout/Topbar';
@@ -10,8 +11,7 @@ export default async function UserLayout({
 }) {
   const supabase = await createClient();
   const { data: { user: authUser } } = await supabase.auth.getUser();
-  const { data: perms } = await supabase.rpc('current_user_permissions');
-  const permissions = (perms as string[]) ?? [];
+  const permissions = await getCurrentUserPermissionsCached(supabase);
 
   let user: { email?: string; name?: string } | null = null;
   if (authUser) {

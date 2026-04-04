@@ -63,15 +63,30 @@ export default function AdminWeaponRelationsPage() {
     const { data: r2 } = await supabase.from('weapon_relations').select('*');
     if (r2) {
       const rels = r2 as { id: string; weapon_catalog_id: string; related_catalog_id: string; relation_type: string }[];
-      const withNames = await Promise.all(
-        rels.map(async (rel) => {
-          const [{ data: wep }, { data: relCat }] = await Promise.all([
-            supabase.from('catalog').select('name').eq('id', rel.weapon_catalog_id).single(),
-            supabase.from('catalog').select('name, category').eq('id', rel.related_catalog_id).single(),
-          ]);
-          return { ...rel, weapon: wep, related: relCat };
-        }),
-      );
+      const idSet = new Set<string>();
+      for (const rel of rels) {
+        idSet.add(rel.weapon_catalog_id);
+        idSet.add(rel.related_catalog_id);
+      }
+      const allIds = [...idSet];
+      const catById = new Map<string, { name: string; category?: string }>();
+      const CHUNK = 200;
+      for (let i = 0; i < allIds.length; i += CHUNK) {
+        const chunk = allIds.slice(i, i + CHUNK);
+        const { data: cats } = await supabase.from('catalog').select('id, name, category').in('id', chunk);
+        for (const row of (cats ?? []) as { id: string; name: string; category: string }[]) {
+          catById.set(row.id, { name: row.name, category: row.category });
+        }
+      }
+      const withNames = rels.map((rel) => {
+        const w = catById.get(rel.weapon_catalog_id);
+        const r = catById.get(rel.related_catalog_id);
+        return {
+          ...rel,
+          weapon: w ? { name: w.name } : null,
+          related: r ? { name: r.name, category: r.category } : null,
+        };
+      });
       setRelations(withNames as unknown as Relation[]);
     }
   }

@@ -98,15 +98,16 @@ export default function AdminActivityPage() {
   const [filterUser, setFilterUser] = useState('');
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 20;
+  const ACTIVITY_FETCH_LIMIT = 300;
 
   useEffect(() => {
     void (async () => {
       try {
         const { data } = await supabase
           .from('activity_logs')
-          .select('*')
+          .select('id, created_at, username, role_key, action, entity, entity_id, details')
           .order('created_at', { ascending: false })
-          .limit(500);
+          .limit(ACTIVITY_FETCH_LIMIT);
         setLogs((data ?? []) as Log[]);
       } finally {
         setLoading(false);
@@ -159,7 +160,9 @@ export default function AdminActivityPage() {
 
   return (
     <Card title="Log Aktivitas">
-      <p className="text-sm text-slate-400 mb-4">Riwayat aktivitas admin di panel ini.</p>
+      <p className="text-sm text-slate-400 mb-4">
+        Riwayat aktivitas admin di panel ini (hingga {ACTIVITY_FETCH_LIMIT} entri terbaru).
+      </p>
       <TableToolbar
         searchPlaceholder="Cari action, entity, user, details…"
         searchValue={search}

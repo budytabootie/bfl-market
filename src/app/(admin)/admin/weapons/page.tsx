@@ -21,7 +21,8 @@ type WarehouseWeapon = {
 };
 
 const STATUSES = ['available', 'in_use', 'broken', 'lost', 'confiscated'] as const;
-const FETCH_LIMIT = 5000;
+/** Cap rows loaded; filter/search tetap di client pada dataset ini. */
+const FETCH_LIMIT = 2500;
 const PAGE_SIZE = 20;
 
 export default function AdminWeaponsPage() {
@@ -48,6 +49,7 @@ export default function AdminWeaponsPage() {
   const [ownerLoading, setOwnerLoading] = useState(false);
   const [addOwnerPickerOpen, setAddOwnerPickerOpen] = useState(false);
   const [selectedOwnerForAdd, setSelectedOwnerForAdd] = useState<{ id: string; username: string } | null>(null);
+  const [weaponsTruncated, setWeaponsTruncated] = useState(false);
 
   const filteredWeapons = useMemo(() => {
     let r = weapons;
@@ -82,9 +84,12 @@ export default function AdminWeaponsPage() {
     if (wErr) {
       setError(`Gagal load: ${wErr.message}`);
       setWeapons([]);
+      setWeaponsTruncated(false);
       return;
     }
-    setWeapons((w ?? []) as unknown as WarehouseWeapon[]);
+    const rows = (w ?? []) as unknown as WarehouseWeapon[];
+    setWeapons(rows);
+    setWeaponsTruncated(rows.length >= FETCH_LIMIT);
   }
 
   useEffect(() => {
@@ -253,6 +258,11 @@ export default function AdminWeaponsPage() {
         </form>
       </Card>
       <Card title="Daftar Weapons">
+        {weaponsTruncated && (
+          <p className="mb-3 text-xs text-amber-200/90 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2">
+            Memuat hingga {FETCH_LIMIT.toLocaleString('id-ID')} baris pertama (urut serial). Senjata di luar batas ini tidak muncul di daftar sampai pagination server ditambahkan.
+          </p>
+        )}
         <TableToolbar
           searchPlaceholder="Cari nama senjata atau SN…"
           searchValue={search}

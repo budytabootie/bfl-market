@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -35,6 +35,18 @@ type OrderItem = {
   catalog: { name: string; category?: string } | null;
 };
 
+type RpcHistoryPayload = {
+  total_count: number;
+  stats: {
+    reguler: number;
+    po: number;
+    po_tabs: { bayar: number; diterima: number; selesai: number };
+  };
+  orders: Order[];
+  items: OrderItem[];
+  order_item_weapons: { order_item_id: string }[];
+};
+
 export default function AdminOrdersHistoryPage() {
   const supabase = createClient();
   const [orders, setOrders] = useState<Order[]>([]);
@@ -57,6 +69,12 @@ export default function AdminOrdersHistoryPage() {
   const [orderItemWeapons, setOrderItemWeapons] = useState<{ order_item_id: string }[]>([]);
   const [treasuryUsers, setTreasuryUsers] = useState<{ username: string; name: string }[]>([]);
   const [orderTypeTab, setOrderTypeTab] = useState<'reguler' | 'po'>('reguler');
+  const [totalOrderCount, setTotalOrderCount] = useState(0);
+  const [stats, setStats] = useState({
+    reguler: 0,
+    po: 0,
+    po_tabs: { bayar: 0, diterima: 0, selesai: 0 },
+  });
   const PAGE_SIZE = 10;
 
   /** Approver filter: gabungan dari approved_by (orders) + daftar Treasury */
@@ -80,80 +98,9 @@ export default function AdminOrdersHistoryPage() {
     return [opts[0]!, ...rest];
   }, [orders, treasuryUsers]);
 
-  const filterBySearch = (r: Order[]) => {
-    const q = search.trim().toLowerCase();
-    if (!q) return r;
-    return r.filter((o) => {
-      const u = (o.users as { username?: string; name?: string }) ?? {};
-      const username = (u.username ?? '').toLowerCase();
-      const name = (u.name ?? '').toLowerCase();
-      return username.includes(q) || name.includes(q);
-    });
-  };
-
-  const filterByApprover = (r: Order[]) => {
-    if (!filterApprover) return r;
-    if (filterApprover === '__none__') return r.filter((o) => !o.approved_by);
-    return r.filter((o) => {
-      const a = o.approver as { username?: string; name?: string } | null;
-      return a && ((a.username ?? a.name) === filterApprover);
-    });
-  };
-
-  const regularOrders = useMemo(() => {
-    let r = orders.filter((o) => !items.some((i) => i.order_id === o.id && i.is_po));
-    if (filterStatus) r = r.filter((o) => o.status === filterStatus);
-    r = filterByApprover(r);
-    return filterBySearch(r);
-  }, [orders, search, filterStatus, filterApprover, items]);
-
-  const poOrders = useMemo(() => {
-    let r = orders.filter((o) => items.some((i) => i.order_id === o.id && i.is_po));
-    if (filterStatus) r = r.filter((o) => o.status === filterStatus);
-    r = filterByApprover(r);
-    return filterBySearch(r);
-  }, [orders, search, filterStatus, filterApprover, items]);
-
-  const paginatedRegular = useMemo(() => {
-    const from = (pageRegular - 1) * PAGE_SIZE;
-    return regularOrders.slice(from, from + PAGE_SIZE);
-  }, [regularOrders, pageRegular]);
-
-  const orderTotal = (orderId: string) =>
-    items.filter((i) => i.order_id === orderId).reduce((s, i) => s + Number(i.subtotal), 0);
-
   /** Total hanya item PO (untuk tab Order PO: bayar/sisa hanya hitung bagian PO) */
   const orderTotalPo = (orderId: string) =>
     items.filter((i) => i.order_id === orderId && i.is_po).reduce((s, i) => s + Number(i.subtotal), 0);
-
-  const poOrdersMenungguBayar = useMemo(() => {
-    return poOrders.filter((o) => {
-      if (o.status !== 'listed') return false;
-      const totalPo = orderTotalPo(o.id);
-      const paid = Number(o.paid_amount ?? 0);
-      return paid < totalPo;
-    });
-  }, [poOrders, items]);
-
-  /** Listed + sudah bayar: bisa masih ada item belum received, atau semua received tapi belum klik Selesaikan PO */
-  const poOrdersMenungguDiterima = useMemo(() => {
-    return poOrders.filter((o) => o.status === 'listed' && o.paid_at);
-  }, [poOrders]);
-
-  const poOrdersSelesai = useMemo(() => {
-    return poOrders.filter((o) => o.status === 'completed');
-  }, [poOrders]);
-
-  const poOrdersForTab = useMemo(() => {
-    if (poTab === 'bayar') return poOrdersMenungguBayar;
-    if (poTab === 'diterima') return poOrdersMenungguDiterima;
-    return poOrdersSelesai;
-  }, [poTab, poOrdersMenungguBayar, poOrdersMenungguDiterima, poOrdersSelesai]);
-
-  const paginatedPo = useMemo(() => {
-    const from = (pagePo - 1) * PAGE_SIZE;
-    return poOrdersForTab.slice(from, from + PAGE_SIZE);
-  }, [poOrdersForTab, pagePo]);
 
   /** Group orders by transaction date (created_at) in WIB */
   function groupOrdersByDate(orderList: Order[]) {
@@ -169,28 +116,47 @@ export default function AdminOrdersHistoryPage() {
       .map(([, v]) => v);
   }
 
-  async function load() {
+  const load = useCallback(async () => {
     setError(null);
     try {
+      await supabase.rpc('auto_receive_po_items');
       const { data: canAssign } = await supabase.rpc('is_superadmin_or_treasurer');
       setCanAssignSn(!!canAssign);
-      await supabase.rpc('auto_receive_po_items');
-      const { data: ord, error: ordErr } = await supabase
-        .from('orders')
-        .select(`
-          id, created_at, status, completed_at, approved_by, user_id, paid_at, paid_amount,
-          users!user_id(username, name),
-          approver:users!approved_by(username, name)
-        `)
-        .order('created_at', { ascending: false });
-      if (ordErr) {
-        setError(`Gagal load orders: ${ordErr.message}`);
+      const { data: raw, error: rpcErr } = await supabase.rpc('get_admin_orders_history_page', {
+        p_kind: orderTypeTab === 'reguler' ? 'reguler' : 'po',
+        p_po_tab: poTab,
+        p_search: search,
+        p_status: filterStatus,
+        p_filter_approver: filterApprover,
+        p_page: orderTypeTab === 'reguler' ? pageRegular : pagePo,
+        p_page_size: PAGE_SIZE,
+      });
+      if (rpcErr) throw new Error(rpcErr.message);
+      const payload = raw as RpcHistoryPayload | null;
+      if (!payload) {
+        setTotalOrderCount(0);
+        setStats({ reguler: 0, po: 0, po_tabs: { bayar: 0, diterima: 0, selesai: 0 } });
         setOrders([]);
         setItems([]);
+        setOrderItemWeapons([]);
         return;
       }
-      setOrders((ord ?? []) as unknown as Order[]);
+      setTotalOrderCount(payload.total_count);
+      setStats(payload.stats);
+      setOrders((payload.orders ?? []) as Order[]);
+      setItems((payload.items ?? []) as OrderItem[]);
+      setOrderItemWeapons((payload.order_item_weapons ?? []) as { order_item_id: string }[]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unknown error');
+      setOrders([]);
+      setItems([]);
+      setOrderItemWeapons([]);
+      setTotalOrderCount(0);
+    }
+  }, [supabase, orderTypeTab, poTab, search, filterStatus, filterApprover, pageRegular, pagePo]);
 
+  useEffect(() => {
+    void (async () => {
       const { data: treasuryRows } = await supabase.from('treasury').select('users!user_id(username, name)');
       const raw = (treasuryRows ?? []) as Array<{ users: { username?: string; name?: string } | { username?: string; name?: string }[] | null }>;
       const treasuryList = raw.flatMap((r) => {
@@ -200,51 +166,15 @@ export default function AdminOrdersHistoryPage() {
         return arr.filter((x) => x && (x.username || x.name)).map((x) => ({ username: x!.username ?? '', name: x!.name ?? '' }));
       });
       setTreasuryUsers(treasuryList);
-
-      const orderIds = (ord ?? []).map((o) => o.id);
-      if (orderIds.length > 0) {
-        const { data: it, error: itErr } = await supabase
-          .from('order_items')
-          .select('id, order_id, catalog_id, quantity, price_each, subtotal, status, is_po, ready_for_receive_at, received_at, catalog(name, category)')
-          .in('order_id', orderIds);
-        if (itErr) setError((prev) => (prev ? `${prev}; ` : '') + `Order items: ${itErr.message}`);
-        const itemList = (it ?? []) as unknown as OrderItem[];
-        setItems(itemList);
-        const itemIds = itemList.map((x) => x.id);
-        if (itemIds.length === 0) {
-          setOrderItemWeapons([]);
-        } else {
-          // Avoid oversized URL/query when order history is large.
-          const CHUNK_SIZE = 200;
-          const merged: { order_item_id: string }[] = [];
-          for (let i = 0; i < itemIds.length; i += CHUNK_SIZE) {
-            const chunk = itemIds.slice(i, i + CHUNK_SIZE);
-            const { data: oiwChunk, error: oiwErr } = await supabase
-              .from('order_item_weapons')
-              .select('order_item_id')
-              .in('order_item_id', chunk);
-            if (oiwErr) throw new Error(`Order item weapons: ${oiwErr.message}`);
-            merged.push(...((oiwChunk ?? []) as { order_item_id: string }[]));
-          }
-          setOrderItemWeapons(merged);
-        }
-      } else {
-        setItems([]);
-        setOrderItemWeapons([]);
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unknown error');
-      setOrders([]);
-      setItems([]);
-    }
-  }
+    })();
+  }, [supabase]);
 
   useEffect(() => {
     void (async () => {
       setLoading(true);
       await load();
     })().finally(() => setLoading(false));
-  }, []);
+  }, [load]);
 
   async function markOrderPaid(orderId: string, amount: number) {
     setPayLoading(true);
@@ -506,25 +436,25 @@ export default function AdminOrdersHistoryPage() {
         <div className="flex gap-2 border-b border-slate-700/80 pb-4 mb-4">
           <button
             type="button"
-            onClick={() => setOrderTypeTab('reguler')}
+            onClick={() => { setOrderTypeTab('reguler'); setPageRegular(1); }}
             className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
               orderTypeTab === 'reguler'
                 ? 'bg-bfl-primary/20 text-bfl-primary border border-bfl-primary/40'
                 : 'text-slate-400 hover:text-slate-200 border border-transparent'
             }`}
           >
-            Order Reguler ({regularOrders.length})
+            Order Reguler ({stats.reguler})
           </button>
           <button
             type="button"
-            onClick={() => setOrderTypeTab('po')}
+            onClick={() => { setOrderTypeTab('po'); setPagePo(1); }}
             className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
               orderTypeTab === 'po'
                 ? 'bg-amber-500/30 text-amber-200 border border-amber-500/40'
                 : 'text-slate-400 hover:text-slate-200 border border-transparent'
             }`}
           >
-            Order PO ({poOrders.length})
+            Order PO ({stats.po})
           </button>
         </div>
 
@@ -553,16 +483,16 @@ export default function AdminOrdersHistoryPage() {
                   onChange: (v) => { setFilterApprover(v); setPageRegular(1); setPagePo(1); },
                 },
               ]}
-              totalCount={regularOrders.length}
+              totalCount={totalOrderCount}
               page={pageRegular}
               pageSize={PAGE_SIZE}
               onPageChange={setPageRegular}
             />
-            {regularOrders.length === 0 ? (
+            {totalOrderCount === 0 ? (
               <div className="py-8 text-center"><p className="text-slate-400">Belum ada order reguler.</p></div>
             ) : (
               <div className="space-y-8">
-                {groupOrdersByDate(paginatedRegular).map(({ dateKey, dateLabel, orders: dayOrders }) => (
+                {groupOrdersByDate(orders).map(({ dateKey, dateLabel, orders: dayOrders }) => (
                   <div key={dateKey} className="rounded-xl border border-slate-700/80 bg-slate-900/30 overflow-hidden">
                     <div className="px-4 py-3 border-b border-slate-700/80 bg-slate-800/50 flex flex-wrap items-center justify-between gap-2">
                       <h3 className="font-semibold text-slate-200">Transaksi {dateLabel}</h3>
@@ -588,9 +518,9 @@ export default function AdminOrdersHistoryPage() {
                   className={`px-4 py-2 rounded-lg text-sm font-medium ${poTab === tab ? 'bg-amber-500/30 text-amber-200' : 'text-slate-400 hover:text-slate-200'}`}
                   onClick={() => { setPoTab(tab); setPagePo(1); }}
                 >
-                  {tab === 'bayar' && `Menunggu Bayar (${poOrdersMenungguBayar.length})`}
-                  {tab === 'diterima' && `Menunggu Diterima (${poOrdersMenungguDiterima.length})`}
-                  {tab === 'selesai' && `Selesai (${poOrdersSelesai.length})`}
+                  {tab === 'bayar' && `Menunggu Bayar (${stats.po_tabs?.bayar ?? 0})`}
+                  {tab === 'diterima' && `Menunggu Diterima (${stats.po_tabs?.diterima ?? 0})`}
+                  {tab === 'selesai' && `Selesai (${stats.po_tabs?.selesai ?? 0})`}
                 </button>
               ))}
             </div>
@@ -618,16 +548,16 @@ export default function AdminOrdersHistoryPage() {
                   onChange: (v) => { setFilterApprover(v); setPagePo(1); },
                 },
               ]}
-              totalCount={poOrdersForTab.length}
+              totalCount={totalOrderCount}
               page={pagePo}
               pageSize={PAGE_SIZE}
               onPageChange={setPagePo}
             />
-            {poOrdersForTab.length === 0 ? (
+            {totalOrderCount === 0 ? (
               <div className="py-8 text-center"><p className="text-slate-400">{poTab === 'bayar' ? 'Tidak ada order menunggu bayar.' : poTab === 'diterima' ? 'Tidak ada order menunggu diterima.' : 'Belum ada order PO selesai.'}</p></div>
             ) : (
               <div className="space-y-4">
-                {paginatedPo.map((o) => renderOrderCardPo(o))}
+                {orders.map((o) => renderOrderCardPo(o))}
               </div>
             )}
           </>
