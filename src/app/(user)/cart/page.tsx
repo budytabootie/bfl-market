@@ -246,27 +246,84 @@ export default function CartPage() {
 }
 
 function QuantityControls({ value, max, onChange }: { value: number; max?: number; onChange: (q: number) => void }) {
+  const [draft, setDraft] = useState(String(value));
+
+  useEffect(() => {
+    setDraft(String(value));
+  }, [value]);
+
+  function clampAndApply(n: number) {
+    let q = Math.max(1, Math.floor(n));
+    if (max != null) q = Math.min(q, max);
+    onChange(q);
+  }
+
+  function commitDraft() {
+    const digits = draft.replace(/\D/g, '');
+    if (digits === '') {
+      setDraft(String(value));
+      return;
+    }
+    const n = parseInt(digits, 10);
+    if (!Number.isFinite(n)) {
+      setDraft(String(value));
+      return;
+    }
+    clampAndApply(n);
+  }
+
+  /** Nilai dasar untuk +/-: angka yang sedang diketik (belum blur) kalau valid, kalau tidak pakai value. */
+  function effectiveBase(): number {
+    const digits = draft.replace(/\D/g, '');
+    if (digits === '') return value;
+    const n = parseInt(digits, 10);
+    if (!Number.isFinite(n) || n < 1) return value;
+    return n;
+  }
+
   return (
     <div className="inline-flex items-center rounded-lg border border-slate-700/80 bg-slate-900/50 overflow-hidden">
       <button
         type="button"
-        className="flex h-9 w-9 items-center justify-center text-slate-400 hover:bg-slate-700/60 hover:text-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        onClick={() => onChange(value - 1)}
-        disabled={value <= 1}
+        className="flex h-9 w-9 shrink-0 items-center justify-center text-slate-400 hover:bg-slate-700/60 hover:text-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        onClick={() => {
+          const base = effectiveBase();
+          clampAndApply(base - 1);
+        }}
+        disabled={effectiveBase() <= 1}
         aria-label="Kurangi jumlah"
       >
         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
         </svg>
       </button>
-      <span className="flex h-9 min-w-10 items-center justify-center text-sm font-medium text-slate-200 tabular-nums">
-        {value}
-      </span>
+      <input
+        type="text"
+        inputMode="numeric"
+        autoComplete="off"
+        aria-label="Jumlah"
+        title={max != null ? `Min 1, maks ${max} (stok)` : 'Ketik jumlah lalu Enter atau klik di luar'}
+        className="h-9 w-14 min-w-14 max-w-20 border-0 border-x border-slate-700/60 bg-slate-900/80 px-1 text-center text-sm font-medium text-slate-200 tabular-nums focus:outline-none focus:ring-2 focus:ring-bfl-primary/40 focus:ring-inset"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value.replace(/\D/g, ''))}
+        onBlur={commitDraft}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            (e.target as HTMLInputElement).blur();
+          }
+        }}
+      />
       <button
         type="button"
-        className="flex h-9 w-9 items-center justify-center text-slate-400 hover:bg-slate-700/60 hover:text-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        onClick={() => onChange(value + 1)}
-        disabled={max != null && value >= max}
+        className="flex h-9 w-9 shrink-0 items-center justify-center text-slate-400 hover:bg-slate-700/60 hover:text-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        onClick={() => {
+          const base = effectiveBase();
+          let next = base + 1;
+          if (max != null) next = Math.min(next, max);
+          onChange(next);
+        }}
+        disabled={max != null && effectiveBase() >= max}
         aria-label="Tambah jumlah"
       >
         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
